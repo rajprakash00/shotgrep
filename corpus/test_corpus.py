@@ -232,7 +232,12 @@ class DownloadTests(unittest.TestCase):
             try:
                 with self.assertRaises(fetch.FetchError):
                     fetch.download(
-                        f"{server.url}/clip.bin", root / "out.bin", sha256="0" * 64, size=5, retries=1, log=lambda *_: None
+                        f"{server.url}/clip.bin",
+                        root / "out.bin",
+                        sha256="0" * 64,
+                        size=5,
+                        retries=1,
+                        log=lambda *_: None,
                     )
             finally:
                 server.close()

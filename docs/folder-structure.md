@@ -2,12 +2,13 @@
 
 ```
 shotgrep/
-├── pipeline/            # Python: ingest stages, model wrappers, CLI
+├── pipeline/            # Python: ingest stages, manifest, model wrappers, CLI
 │   ├── stages/          # one module per stage, idempotent, manifest-driven
 │   ├── models/          # embedder, transcriber — thin interfaces over pretrained models
 │   └── cli.py           # `shotgrep ingest <file> [--from-stage embed] [--workers N]`
 ├── api/                 # FastAPI: search, moments, transcripts; MCP server
 ├── web/                 # Next.js: search box, results grid, player with deep links
+├── tests/               # contract tests for the public seams, plus fixtures/
 ├── corpus/              # manifest, fetch/verify tool, attribution (media gitignored)
 ├── eval/                # queries.yaml, harness, committed result tables
 ├── index/               # built LanceDB + thumbnails for the demo corpus
@@ -23,5 +24,7 @@ shotgrep/
 - `index/` is a build output, deliberately committed for the demo corpus so the hosted demo starts instantly.
 - `eval/queries.yaml` is frozen once ranking work starts; changes need a dated note.
 - Stages never import each other; they communicate through the manifest and files.
+- Contract tests live in `tests/` and drive public seams only (the CLI, the read
+  contract); stage internals get no tests.
 - Model wrappers hide the runtime (ONNX/CUDA) behind one interface, so model or precision swaps stay local.
 - `docs/agents/` holds tooling configuration, not product docs.

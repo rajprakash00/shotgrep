@@ -6,6 +6,12 @@ Guidance for agents working in this repo.
 
 shotgrep turns video into a searchable index of moments. Start with `SPEC.md` (what v1 must do), `CONTEXT.md` (vocabulary), and `docs/hld.md` (design).
 
+## Commands
+
+- Sync deps: `uv sync`
+- Test: `uv run pytest` (ingest contract tests need `ffprobe` on `PATH`, i.e. FFmpeg installed)
+- Lint: `uv run ruff check .`
+
 ## Agent skills
 
 ### Issue tracker

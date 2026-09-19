@@ -22,6 +22,14 @@ requires. The films themselves are unmodified; ingest derives proxies,
 thumbnails, transcripts, and embeddings from them, and those derivatives stay
 under the film's license.
 
+## Test fixture
+
+`tests/fixtures/clip.mp4` is a 10-second excerpt of *Tears of Steel* (2012),
+Blender Foundation / Mango open movie project — CC BY 3.0
+(<https://creativecommons.org/licenses/by/3.0/>). Changes: excerpted from
+00:00:23–00:00:33, downscaled, and re-encoded. Regeneration command and the
+dialogue in the range live in `tests/fixtures/README.md`.
+
 ## Per-asset verification
 
 Licenses were verified against the films' official project pages on
