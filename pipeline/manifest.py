@@ -64,6 +64,12 @@ class Manifest:
             return "complete"
         return "partial"
 
+    def reset_from(self, names: Sequence[str]) -> None:
+        for name in names:
+            if name in self.data["stages"]:
+                del self.data["stages"][name]
+                self._dirty = True
+
     def record_success(self, name: str, outputs: dict, duration_ms: int) -> None:
         self._record(name, "complete", outputs, None, duration_ms)
 

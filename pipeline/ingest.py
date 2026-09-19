@@ -2,7 +2,8 @@
 
 The asset is identified by the SHA-256 of its bytes. The manifest lives at
 work_dir/<asset-id>/manifest.json; completed stages are skipped, so reruns are
-safe. A stage failure is recorded in the manifest before the error propagates.
+safe. --from-stage reruns from a chosen stage onward and leaves earlier stages
+alone. A stage failure is recorded in the manifest before the error propagates.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from pipeline.stages import STAGES
 CHUNK = 1 << 20
 
 
-def ingest(source: Path, work_dir: Path) -> Manifest:
+def ingest(source: Path, work_dir: Path, *, from_stage: str | None = None) -> Manifest:
     source = _readable_file(Path(source))
     digest, size = _hash(source)
     asset = {
@@ -30,9 +31,14 @@ def ingest(source: Path, work_dir: Path) -> Manifest:
     manifest = Manifest.load_or_create(Path(work_dir) / digest / "manifest.json", asset)
     asset_dir = manifest.path.parent
     names = [stage.NAME for stage in STAGES]
+    start = _start_index(names, from_stage, manifest)
+    if from_stage is not None:
+        manifest.reset_from(names[start:])
 
-    for stage in STAGES:
-        if manifest.stage_complete(stage.NAME):
+    for position, stage in enumerate(STAGES):
+        if position < start:
+            continue
+        if from_stage is None and manifest.stage_complete(stage.NAME):
             continue
         started = time.monotonic()
         try:
@@ -47,6 +53,18 @@ def ingest(source: Path, work_dir: Path) -> Manifest:
     manifest.set_status(manifest.overall_status(names))
     manifest.save()
     return manifest
+
+
+def _start_index(names: list[str], from_stage: str | None, manifest: Manifest) -> int:
+    if from_stage is None:
+        return 0
+    if from_stage not in names:
+        raise IngestError(f"unknown stage {from_stage!r}; stages are {', '.join(names)}")
+    start = names.index(from_stage)
+    for name in names[:start]:
+        if not manifest.stage_complete(name):
+            raise IngestError(f"cannot start at stage {from_stage!r}: {name!r} is not complete")
+    return start
 
 
 def _readable_file(source: Path) -> Path:

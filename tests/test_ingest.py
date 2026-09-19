@@ -7,9 +7,12 @@ per SPEC.md: stage internals get no tests. ffprobe (FFmpeg) must be on PATH.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -21,12 +24,18 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "clip.mp4"
 FIXTURE_SHA256 = hashlib.sha256(FIXTURE.read_bytes()).hexdigest()
 
 
-def run_ingest(input_path: Path, work_dir: Path) -> subprocess.CompletedProcess[str]:
+def run_ingest(
+    input_path: Path,
+    work_dir: Path,
+    *args: str,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "pipeline", "ingest", str(input_path), "--work-dir", str(work_dir)],
+        [sys.executable, "-m", "pipeline", "ingest", str(input_path), "--work-dir", str(work_dir), *args],
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,
+        env=env,
     )
 
 
@@ -38,6 +47,121 @@ def manifest_path(work_dir: Path) -> Path:
 
 def read_manifest(work_dir: Path) -> dict:
     return json.loads(manifest_path(work_dir).read_text(encoding="utf-8"))
+
+
+def read_artifact(work_dir: Path, name: str) -> bytes:
+    return (manifest_path(work_dir).parent / name).read_bytes()
+
+
+def ffprobe_json(path: Path) -> dict:
+    completed = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_format", "-show_streams", "-of", "json", str(path)],
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return json.loads(completed.stdout)
+
+
+def assert_playable_proxy(path: Path, *, duration_s: float | None = None, has_audio: bool = True) -> None:
+    probe = ffprobe_json(path)
+    video = next(stream for stream in probe["streams"] if stream["codec_type"] == "video")
+    assert video["codec_name"] == "h264"
+    assert video["pix_fmt"] == "yuv420p"
+    if has_audio:
+        audio = next(stream for stream in probe["streams"] if stream["codec_type"] == "audio")
+        assert audio["codec_name"] == "aac"
+    assert "mp4" in probe["format"]["format_name"].split(",")
+    if duration_s is not None:
+        assert float(probe["format"]["duration"]) == pytest.approx(duration_s, abs=0.1)
+    data = path.read_bytes()
+    assert data.find(b"moov") != -1
+    assert data.find(b"moov") < data.find(b"mdat"), "moov must precede mdat for browser streaming"
+
+
+SHIM_TEMPLATE = """#!/bin/sh
+case "$*" in
+{case}esac
+exec {ffmpeg} "$@"
+"""
+HIDE_HW_CASE = """  *-encoders*)
+    {ffmpeg} -encoders | grep -v h264_nvenc
+    exit 0
+    ;;
+"""
+BREAK_HW_CASE = """  *h264_nvenc*)
+    echo "h264_nvenc unavailable" >&2
+    exit 1
+    ;;
+"""
+
+
+def env_with_ffmpeg_shim(tmp_path: Path, case: str) -> dict[str, str]:
+    real_ffmpeg = shutil.which("ffmpeg")
+    assert real_ffmpeg is not None, "FFmpeg must be on PATH"
+    shim_dir = tmp_path / "bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "ffmpeg"
+    shim.write_text(
+        SHIM_TEMPLATE.format(case=case, ffmpeg=shlex.quote(real_ffmpeg)),
+        encoding="utf-8",
+    )
+    shim.chmod(0o755)
+    return {**os.environ, "PATH": f"{shim_dir}{os.pathsep}{os.environ['PATH']}"}
+
+
+def write_odd_clip(path: Path) -> None:
+    width, height = 321, 241
+    ppm = path.with_suffix(".ppm")
+    ppm.write_bytes(b"P6\n%d %d\n255\n" % (width, height) + bytes([64]) * (width * height * 3))
+    completed = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-loop",
+            "1",
+            "-i",
+            str(ppm),
+            "-t",
+            "1",
+            "-r",
+            "10",
+            "-c:v",
+            "ffv1",
+            "-pix_fmt",
+            "bgr0",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+@functools.lru_cache(maxsize=1)
+def nvenc_works() -> bool:
+    if shutil.which("ffmpeg") is None:
+        return False
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=black:s=320x240:d=0.2",
+        "-c:v",
+        "h264_nvenc",
+        "-f",
+        "null",
+        "-",
+    ]
+    return subprocess.run(command, capture_output=True).returncode == 0
+
 
 
 def test_ingest_probes_fixture(tmp_path: Path) -> None:
@@ -114,3 +238,114 @@ def test_corrupt_manifest_fails_cleanly(tmp_path: Path) -> None:
     assert result.returncode != 0
     assert "not valid JSON" in result.stderr
     assert manifest.read_text(encoding="utf-8") == "{not json"
+
+
+def test_proxy_and_shots_stages_complete(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    manifest = read_manifest(work)
+    assert manifest["status"] == "complete"
+    for stage in ("proxy", "shots"):
+        assert manifest["stages"][stage]["status"] == "complete"
+        assert manifest["stages"][stage]["error"] is None
+    assert manifest["stages"]["proxy"]["outputs"]["artifact"] == "proxy.mp4"
+    assert manifest["stages"]["shots"]["outputs"]["artifact"] == "shots.json"
+    assert manifest["stages"]["shots"]["outputs"]["count"] >= 2
+
+    assert_playable_proxy(manifest_path(work).parent / "proxy.mp4", duration_s=10.0)
+    shots = json.loads(read_artifact(work, "shots.json"))["shots"]
+    assert len(shots) >= 2
+    assert [shot["index"] for shot in shots] == list(range(len(shots)))
+    assert shots[0]["start_s"] == 0.0
+    for previous, current in zip(shots, shots[1:], strict=False):
+        assert current["start_s"] == previous["end_s"]
+    assert shots[-1]["end_s"] == pytest.approx(10.0, abs=0.1)
+
+
+def test_resume_from_shots_skips_probe_and_proxy(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    first = run_ingest(FIXTURE, work)
+    assert first.returncode == 0, first.stderr
+    directory = manifest_path(work).parent
+    before = read_manifest(work)
+    probe_bytes = read_artifact(work, "probe.json")
+    proxy_bytes = read_artifact(work, "proxy.mp4")
+    shots_bytes = read_artifact(work, "shots.json")
+    probe_mtime = (directory / "probe.json").stat().st_mtime_ns
+    proxy_mtime = (directory / "proxy.mp4").stat().st_mtime_ns
+
+    second = run_ingest(FIXTURE, work, "--from-stage", "shots")
+    assert second.returncode == 0, second.stderr
+
+    after = read_manifest(work)
+    assert after["status"] == "complete"
+    assert after["stages"]["probe"] == before["stages"]["probe"]
+    assert after["stages"]["proxy"] == before["stages"]["proxy"]
+    assert read_artifact(work, "probe.json") == probe_bytes
+    assert read_artifact(work, "proxy.mp4") == proxy_bytes
+    assert read_artifact(work, "shots.json") == shots_bytes
+    assert (directory / "probe.json").stat().st_mtime_ns == probe_mtime
+    assert (directory / "proxy.mp4").stat().st_mtime_ns == proxy_mtime
+
+
+def test_from_stage_requires_earlier_stages(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work, "--from-stage", "shots")
+    assert result.returncode != 0
+    assert "probe" in result.stderr
+    assert list(work.glob("*/manifest.json")) == []
+
+
+@pytest.mark.parametrize(
+    ("case", "expect_fallback"),
+    [(HIDE_HW_CASE, False), (BREAK_HW_CASE, True)],
+    ids=["no-hardware-encoder", "broken-hardware-encoder"],
+)
+def test_cpu_proxy_when_hardware_unavailable(tmp_path: Path, case: str, expect_fallback: bool) -> None:
+    env = env_with_ffmpeg_shim(tmp_path, case)
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work, env=env)
+    assert result.returncode == 0, result.stderr
+
+    manifest = read_manifest(work)
+    outputs = manifest["stages"]["proxy"]["outputs"]
+    assert outputs["encoder"] == "libx264"
+    if expect_fallback:
+        assert "h264_nvenc" in outputs["fallback_reason"]
+    else:
+        assert "fallback_reason" not in outputs
+    assert manifest["status"] == "complete"
+    assert_playable_proxy(manifest_path(work).parent / "proxy.mp4", duration_s=10.0)
+
+
+@pytest.mark.skipif(not nvenc_works(), reason="no working h264_nvenc on this machine")
+def test_hardware_proxy_when_available(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    outputs = read_manifest(work)["stages"]["proxy"]["outputs"]
+    assert outputs["encoder"] == "h264_nvenc"
+    assert "fallback_reason" not in outputs
+    assert_playable_proxy(manifest_path(work).parent / "proxy.mp4", duration_s=10.0)
+
+
+def test_proxy_normalizes_odd_source_dimensions(tmp_path: Path) -> None:
+    source = tmp_path / "odd.mkv"
+    write_odd_clip(source)
+    source_stream = next(
+        stream for stream in ffprobe_json(source)["streams"] if stream["codec_type"] == "video"
+    )
+    assert source_stream["width"] % 2 == 1 and source_stream["height"] % 2 == 1
+
+    work = tmp_path / "work"
+    result = run_ingest(source, work)
+    assert result.returncode == 0, result.stderr
+
+    proxy = manifest_path(work).parent / "proxy.mp4"
+    proxy_stream = next(stream for stream in ffprobe_json(proxy)["streams"] if stream["codec_type"] == "video")
+    assert proxy_stream["width"] % 2 == 0
+    assert proxy_stream["height"] % 2 == 0
+    assert_playable_proxy(proxy, duration_s=1.0, has_audio=False)
