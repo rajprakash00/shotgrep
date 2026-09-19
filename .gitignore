@@ -1,0 +1,22 @@
+# artifacts
+work/
+*.log
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# node
+node_modules/
+.next/
+dist/
+
+# env
+.env
+.env.*
+
+# os
+.DS_Store
