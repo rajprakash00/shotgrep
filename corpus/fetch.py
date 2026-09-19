@@ -99,7 +99,7 @@ def _mvhd_duration(handle, payload_pos: int, payload_size: int) -> float | None:
 def mp4_duration_s(path: Path) -> float | None:
     size = path.stat().st_size
     with path.open("rb") as handle:
-        for kind, pos, atom_size, header_size in _iter_atoms(handle, size):
+        for kind, pos, atom_size, _ in _iter_atoms(handle, size):
             if kind != b"moov":
                 continue
             moov_end = pos + atom_size
@@ -432,7 +432,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--only", action="append", default=[], metavar="ID", help="limit to one asset id (repeatable)")
     parser.add_argument("--check", action="store_true", help="verify local files only; no downloads")
     parser.add_argument("--verify-licenses", action="store_true", help="fetch license evidence pages and check quotes")
-    parser.add_argument("--update", action="store_true", help="download, then re-pin hashes/sizes/durations in the manifest")
+    parser.add_argument(
+        "--update", action="store_true", help="download, then re-pin hashes/sizes/durations in the manifest"
+    )
     parser.add_argument("--keep-archives", action="store_true", help="keep downloaded zip archives")
     args = parser.parse_args(argv)
 

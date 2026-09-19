@@ -41,6 +41,18 @@ The films stay under their original licenses:
 Per-asset evidence and the copy-paste block live in
 [corpus/ATTRIBUTION.md](corpus/ATTRIBUTION.md).
 
+## Development
+
+Ingest needs Python 3.12+, [uv](https://docs.astral.sh/uv/), and FFmpeg
+(`ffprobe` on `PATH`).
+
+```sh
+uv sync
+uv run pytest        # contract tests
+uv run ruff check .  # lint
+uv run shotgrep ingest <file> --work-dir work
+```
+
 ## License
 
 [MIT](LICENSE)
