@@ -4,7 +4,7 @@ Guidance for agents working in this repo.
 
 ## Project
 
-shotgrep turns video into a searchable index of moments. See `CONTEXT.md` for vocabulary and `docs/hld.md` for the design.
+shotgrep turns video into a searchable index of moments. Start with `SPEC.md` (what v1 must do), `CONTEXT.md` (vocabulary), and `docs/hld.md` (design).
 
 ## Agent skills
 

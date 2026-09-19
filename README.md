@@ -15,6 +15,7 @@ Ask for a moment in plain language — *"the part where he parks the bike at nig
 
 ## Docs
 
+- [Spec](SPEC.md)
 - [Tech stack](docs/tech-stack.md)
 - [High-level design](docs/hld.md)
 - [Folder structure](docs/folder-structure.md)
