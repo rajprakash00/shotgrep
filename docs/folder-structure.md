@@ -8,6 +8,7 @@ shotgrep/
 │   └── cli.py           # `shotgrep ingest <file> [--from-stage embed] [--workers N]`
 ├── api/                 # FastAPI: search, moments, transcripts; MCP server
 ├── web/                 # Next.js: search box, results grid, player with deep links
+├── corpus/              # manifest, fetch/verify tool, attribution (media gitignored)
 ├── eval/                # queries.yaml, harness, committed result tables
 ├── index/               # built LanceDB + thumbnails for the demo corpus
 ├── work/                # per-asset artifacts (gitignored)
@@ -18,6 +19,7 @@ shotgrep/
 ## Conventions
 
 - `work/` is disposable. Delete it and re-ingest; nothing else depends on it.
+- `corpus/media/` is fetched by `corpus/fetch.py`, verified against the committed `corpus/manifest.json`, and never committed. Ingest reads source media from there.
 - `index/` is a build output, deliberately committed for the demo corpus so the hosted demo starts instantly.
 - `eval/queries.yaml` is frozen once ranking work starts; changes need a dated note.
 - Stages never import each other; they communicate through the manifest and files.

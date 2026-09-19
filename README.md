@@ -19,7 +19,27 @@ Ask for a moment in plain language — *"the part where he parks the bike at nig
 - [Tech stack](docs/tech-stack.md)
 - [High-level design](docs/hld.md)
 - [Folder structure](docs/folder-structure.md)
+- [Corpus](corpus/README.md)
 - [Glossary](CONTEXT.md)
+
+## Corpus and attribution
+
+Ingest, eval, and the demo run on four Blender Foundation open films. Media is
+fetched and verified against a committed manifest; no binaries go in git.
+
+```sh
+python3 corpus/fetch.py
+```
+
+The films stay under their original licenses:
+
+- Big Buck Bunny (2008) © Blender Foundation / Peach open movie project. Source: https://peach.blender.org/. License: CC BY 3.0 — https://creativecommons.org/licenses/by/3.0/. No changes; playback uses generated proxies.
+- Sintel (2010) © Blender Foundation / Durian open movie project. Source: https://durian.blender.org/. License: CC BY 3.0 — https://creativecommons.org/licenses/by/3.0/. No changes; playback uses generated proxies.
+- Tears of Steel (2012) © Blender Foundation / Mango open movie project. Source: https://mango.blender.org/. License: CC BY 3.0 — https://creativecommons.org/licenses/by/3.0/. No changes; playback uses generated proxies.
+- Elephants Dream (2006) © Blender Foundation / Orange open movie project. Source: https://orange.blender.org/. License: CC BY 2.5 — https://creativecommons.org/licenses/by/2.5/. No changes; playback uses generated proxies.
+
+Per-asset evidence and the copy-paste block live in
+[corpus/ATTRIBUTION.md](corpus/ATTRIBUTION.md).
 
 ## License
 
