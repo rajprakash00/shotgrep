@@ -1,5 +1,6 @@
 # artifacts
 work/
+corpus/media/
 *.log
 
 # python
