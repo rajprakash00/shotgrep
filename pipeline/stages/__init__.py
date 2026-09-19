@@ -7,6 +7,6 @@ files. Adding a stage means adding it here in order.
 
 from __future__ import annotations
 
-from pipeline.stages import probe
+from pipeline.stages import probe, proxy, shots
 
-STAGES = (probe,)
+STAGES = (probe, proxy, shots)
