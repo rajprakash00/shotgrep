@@ -40,11 +40,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search_parser.add_argument(
         "-k",
-        type=int,
+        type=_positive_int,
         default=5,
         help="number of moments to return (default: 5)",
     )
+    serve_parser = subparsers.add_parser("serve", help="serve the REST API over the work directory's index")
+    serve_parser.add_argument(
+        "--work-dir",
+        type=Path,
+        default=Path("work"),
+        help="directory holding the index (default: work)",
+    )
+    serve_parser.add_argument("--host", default="127.0.0.1", help="interface to bind (default: 127.0.0.1)")
+    serve_parser.add_argument("--port", type=int, default=8000, help="port to bind (default: 8000)")
     return parser
+
+
+def _positive_int(value: str) -> int:
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return number
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,6 +69,8 @@ def main(argv: list[str] | None = None) -> int:
         return _ingest(args.input, args.work_dir, args.from_stage)
     if args.command == "search":
         return _search(args.query, args.work_dir, args.k)
+    if args.command == "serve":
+        return _serve(args.work_dir, args.host, args.port)
     return 2
 
 
@@ -74,4 +92,13 @@ def _search(query: str, work_dir: Path, k: int) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False))
+    return 0
+
+
+def _serve(work_dir: Path, host: str, port: int) -> int:
+    import uvicorn
+
+    from api.app import create_app
+
+    uvicorn.run(create_app(work_dir), host=host, port=port)
     return 0

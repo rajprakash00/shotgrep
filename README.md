@@ -4,8 +4,9 @@ Search video like it's text.
 
 Ask for a moment in plain language — *"the part where he parks the bike at night"* — and get the exact frame back, with jump-to-timestamp links.
 
-**Status:** early build. Ingest produces a searchable index and the CLI answers
-queries; the API, web player, and eval harness are under construction.
+**Status:** early build. Ingest produces a searchable index; the CLI and REST
+API answer fused visual + transcript queries and serve moment thumbnails and
+transcripts; the web player and eval harness are under construction.
 
 ## Planned surface
 
@@ -53,7 +54,14 @@ uv run pytest        # contract tests
 uv run ruff check .  # lint
 uv run shotgrep ingest <file> --work-dir work
 uv run shotgrep search "the part where he parks the bike at night" --work-dir work
+uv run shotgrep serve --work-dir work   # REST on http://localhost:8000
 ```
+
+The REST endpoints are `GET /search`, `GET /moments/{id}`, and
+`GET /assets/{id}/transcript`; thumbnails are served from `/media`. Results
+carry deep links shaped `{SHOTGREP_WEB_URL}/watch/{asset_id}?t={seconds}`,
+defaulting to `http://localhost:3000` (see
+[docs/adr](docs/adr/0002-read-contract-urls-and-deep-links.md)).
 
 ASR defaults to `large-v3` int8 on CUDA when a device is available, CPU
 otherwise. Override with `SHOTGREP_ASR_MODEL` and `SHOTGREP_ASR_DEVICE`

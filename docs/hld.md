@@ -33,7 +33,7 @@ Stage order: `probe → proxy → shots → asr → frames → embed → index`.
 
 - Query text is embedded by the same model and precision as the index.
 - Candidate retrieval: ANN over visual moments, plus keyword/fuzzy retrieval over transcript moments in the same query service, then fused.
-- Fusion: score normalization + reciprocal rank fusion + priors (shot starts rank above mid-shot samples), then MMR-style dedupe so results are not five adjacent frames.
+- Fusion: score normalization + reciprocal rank fusion + priors (shot starts rank above mid-shot samples), then a greedy MMR-style collapse so results are not five adjacent frames.
 - Results carry: moment id, asset, time range, thumbnail, snippet, score, deep link.
 - Rerank is a pluggable step, off until the eval justifies it.
 
@@ -41,7 +41,10 @@ Stage order: `probe → proxy → shots → asr → frames → embed → index`.
 
 - `assets`: id (content hash), path, duration, fps, codec, status.
 - `moments`: id, asset_id, t_start, t_end, kind, thumbnail path, embedding, snippet, shot_id.
-- Transcripts: per-asset word list. Not embedded wholesale — anchor moments point into it.
+- `transcripts`: per-asset word list, one row per segment. Not embedded wholesale —
+  anchor moments point into it, and range reads come from this table.
+- The built index also carries the moment thumbnails, so it serves on its own
+  (ADR-0001).
 
 ## Agent surface (MCP)
 
