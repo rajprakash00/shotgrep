@@ -189,14 +189,9 @@ def cuda_works() -> bool:
 
     if ctranslate2.get_cuda_device_count() == 0:
         return False
-    from faster_whisper import WhisperModel
+    from pipeline.models.transcriber import FasterWhisperTranscriber
 
-    try:
-        model = WhisperModel("tiny", device="cuda", compute_type="int8")
-        segments, _ = model.transcribe(str(FIXTURE), word_timestamps=True)
-        return bool(list(segments))
-    except Exception:
-        return False
+    return FasterWhisperTranscriber(model="tiny", device="cuda").transcribe(FIXTURE).device == "cuda"
 
 
 def test_ingest_probes_fixture(tmp_path: Path) -> None:

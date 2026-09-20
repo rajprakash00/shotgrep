@@ -9,6 +9,7 @@ precision means editing this module; the asr stage does not change.
 
 from __future__ import annotations
 
+import ctypes
 import os
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -119,12 +120,32 @@ class FasterWhisperTranscriber:
 
 
 def _load_model(model_name: str, device: str) -> WhisperModel:
+    if device == CUDA:
+        _preload_cuda_libraries()
     try:
         from faster_whisper import WhisperModel
 
         return WhisperModel(model_name, device=device, compute_type=COMPUTE_TYPE)
     except Exception as exc:
         raise IngestError(f"could not load ASR model {model_name!r} on {device}: {exc}") from exc
+
+
+def _preload_cuda_libraries() -> None:
+    """Load pip-wheel cuBLAS so ctranslate2's dlopen can resolve it.
+
+    nvidia-cublas-cu12 ships the library under site-packages/nvidia/cublas/lib,
+    which is not on the dynamic loader path. Loading it by absolute path first
+    makes the bare soname resolvable. No-op when the wheel is not installed.
+    """
+    try:
+        import nvidia.cublas.lib as cublas_lib
+    except ImportError:
+        return
+    lib_dir = Path(cublas_lib.__path__[0])
+    for name in ("libcublasLt.so.12", "libcublas.so.12"):
+        library = lib_dir / name
+        if library.is_file():
+            ctypes.CDLL(str(library), mode=ctypes.RTLD_GLOBAL)
 
 
 def _segment(segment) -> Segment:
