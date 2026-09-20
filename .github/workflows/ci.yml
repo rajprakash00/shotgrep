@@ -17,6 +17,12 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libgl1
 
+      - name: Cache ASR model
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface/hub
+          key: faster-whisper-tiny-v1
+
       - name: Lint
         run: uv run ruff check .
 

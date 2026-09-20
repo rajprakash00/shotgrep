@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 dependencies = [
+    "av>=18.1.0",
+    "ctranslate2>=4.8.2",
+    "faster-whisper>=1.2.1",
     "scenedetect>=0.7.1",
 ]
 
@@ -20,6 +23,9 @@ build-backend = "hatchling.build"
 packages = ["pipeline"]
 
 [dependency-groups]
+cuda = [
+    "nvidia-cublas-cu12>=12.9.2.10",
+]
 dev = [
     "pytest>=8.3",
     "ruff>=0.9",

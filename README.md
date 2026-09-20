@@ -53,6 +53,19 @@ uv run ruff check .  # lint
 uv run shotgrep ingest <file> --work-dir work
 ```
 
+ASR defaults to `large-v3` int8 on CUDA when a device is available, CPU
+otherwise. Override with `SHOTGREP_ASR_MODEL` and `SHOTGREP_ASR_DEVICE`
+(`auto`, `cuda`, `cpu`); the contract tests pin a tiny model on CPU.
+
+On an NVIDIA machine, install cuBLAS from the NVIDIA wheels:
+
+```sh
+uv sync --group cuda
+```
+
+The transcriber loads them itself, so no `LD_LIBRARY_PATH` is needed. A plain
+`uv sync` removes the group; add `--group cuda` to restore it.
+
 ## License
 
 [MIT](LICENSE)
