@@ -498,16 +498,17 @@ def test_asset_without_audio_gets_empty_transcript(tmp_path: Path) -> None:
     transcript = read_transcript(work)
     assert transcript["segments"] == []
     assert transcript["language"] is None
+    assert index_rows(work, "transcripts") == []
 
 
 def read_frames(work_dir: Path) -> dict:
     return json.loads(read_artifact(work_dir, "frames.json"))
 
 
-def index_rows(work_dir: Path, table: str) -> list[dict]:
+def index_rows(work_dir: Path, table: str, *, key: str = "id") -> list[dict]:
     db = lancedb.connect(str(manifest_path(work_dir).parent.parent / "index"))
     rows = db.open_table(table).to_arrow().to_pylist()
-    return sorted(rows, key=lambda row: row["id"])
+    return sorted(rows, key=lambda row: row[key])
 
 
 def test_frames_stage_samples_one_fps_shots_and_transcript(tmp_path: Path) -> None:
@@ -586,9 +587,11 @@ def test_index_stage_holds_moments_of_every_kind(tmp_path: Path) -> None:
     assert {row["kind"] for row in rows} == {"frame", "shot_start", "transcript"}
     assert {row["asset_id"] for row in rows} == {FIXTURE_SHA256}
     embed = manifest["stages"]["embed"]["outputs"]
+    index_dir = manifest_path(work).parent.parent / "index"
     for row in rows:
         assert len(row["embedding"]) == 768
         assert (manifest_path(work).parent.parent / row["thumbnail"]).is_file()
+        assert (index_dir / row["thumbnail"]).is_file(), "the built index must carry its thumbnails"
         assert row["embedding_model"] == embed["model"]
         assert row["embedding_precision"] == embed["precision"]
         assert row["embedding_revision"] == embed["revision"]
@@ -600,6 +603,26 @@ def test_index_stage_holds_moments_of_every_kind(tmp_path: Path) -> None:
     assert assets[0]["codec"] == "h264"
     assert assets[0]["fps"] == pytest.approx(24.0, abs=0.01)
     assert assets[0]["duration_s"] == pytest.approx(10.0, abs=0.1)
+
+
+def test_index_stage_holds_transcript_segments_with_words(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    segments = read_transcript(work)["segments"]
+    rows = index_rows(work, "transcripts", key="segment_index")
+    assert len(rows) == len(segments)
+    assert [row["segment_index"] for row in rows] == list(range(len(segments)))
+    assert {row["asset_id"] for row in rows} == {FIXTURE_SHA256}
+    for row, segment in zip(rows, segments, strict=True):
+        assert row["text"] == segment["text"]
+        assert row["start_s"] == segment["start_s"]
+        assert row["end_s"] == segment["end_s"]
+        assert row["words"] == [
+            {"word": word["word"], "start_s": word["start_s"], "end_s": word["end_s"]}
+            for word in segment["words"]
+        ]
 
 
 def test_rerun_embed_and_index_is_idempotent(tmp_path: Path) -> None:

@@ -100,13 +100,18 @@ def test_results_carry_the_read_contract(ingested: Path) -> None:
             "kind",
             "start_s",
             "end_s",
-            "thumbnail",
+            "thumbnail_url",
             "snippet",
             "score",
+            "deep_link",
         }
         assert result["end_s"] >= result["start_s"]
-        assert result["thumbnail"].endswith(f"{round(result['start_s'] * 1000):08d}.jpg")
-        assert (ingested / result["thumbnail"]).is_file()
+        assert result["thumbnail_url"].endswith(f"{round(result['start_s'] * 1000):08d}.jpg")
+        served = result["thumbnail_url"].removeprefix("http://localhost:8000/media/")
+        assert (ingested / "index" / served).is_file()
+        assert result["deep_link"] == (
+            f"http://localhost:3000/watch/{result['asset_id']}?t={result['start_s']:g}"
+        )
 
 
 def test_search_refuses_an_index_from_another_model(ingested: Path, tmp_path: Path) -> None:
