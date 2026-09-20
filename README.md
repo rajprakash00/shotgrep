@@ -4,7 +4,8 @@ Search video like it's text.
 
 Ask for a moment in plain language — *"the part where he parks the bike at night"* — and get the exact frame back, with jump-to-timestamp links.
 
-**Status:** early build. Ingest pipeline, search API, and web player are under construction.
+**Status:** early build. Ingest produces a searchable index and the CLI answers
+queries; the API, web player, and eval harness are under construction.
 
 ## Planned surface
 
@@ -51,11 +52,19 @@ uv sync
 uv run pytest        # contract tests
 uv run ruff check .  # lint
 uv run shotgrep ingest <file> --work-dir work
+uv run shotgrep search "the part where he parks the bike at night" --work-dir work
 ```
 
 ASR defaults to `large-v3` int8 on CUDA when a device is available, CPU
 otherwise. Override with `SHOTGREP_ASR_MODEL` and `SHOTGREP_ASR_DEVICE`
 (`auto`, `cuda`, `cpu`); the contract tests pin a tiny model on CPU.
+
+Frame and query embeddings come from pinned SigLIP-base ONNX int8 assets
+(`Xenova/siglip-base-patch16-224`), fetched once into the Hugging Face cache.
+`SHOTGREP_EMBED_MODEL` and `SHOTGREP_EMBED_PRECISION` (default `int8`) override
+the source; ingest and query must use the same pair. Ingest writes per-asset
+artifacts plus a LanceDB index under `work/index`, so `search` needs only
+`--work-dir`.
 
 On an NVIDIA machine, install cuBLAS from the NVIDIA wheels:
 

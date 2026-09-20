@@ -49,6 +49,7 @@ def ingest(source: Path, work_dir: Path, *, from_stage: str | None = None) -> Ma
             manifest.save()
             raise IngestError(f"{stage.NAME} stage failed: {exc}") from exc
         manifest.record_success(stage.NAME, outputs, _elapsed_ms(started))
+        manifest.save()
 
     manifest.set_status(manifest.overall_status(names))
     manifest.save()

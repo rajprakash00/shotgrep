@@ -17,14 +17,22 @@ import subprocess
 import sys
 from pathlib import Path
 
+import lancedb
+import numpy as np
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "clip.mp4"
 FIXTURE_SHA256 = hashlib.sha256(FIXTURE.read_bytes()).hexdigest()
-# Contract tests exercise the ASR seam cheaply: a tiny model on the CPU path.
-# The default in production is large-v3 with automatic CUDA detection.
-ASR_TEST_ENV = {"SHOTGREP_ASR_MODEL": "tiny", "SHOTGREP_ASR_DEVICE": "cpu"}
+# Contract tests exercise the ASR and embedding seams cheaply and hermetically:
+# a tiny model on the CPU, and the pinned SigLIP int8 pair. The production
+# defaults are large-v3 with automatic CUDA detection and the same SigLIP repo.
+TEST_ENV = {
+    "SHOTGREP_ASR_MODEL": "tiny",
+    "SHOTGREP_ASR_DEVICE": "cpu",
+    "SHOTGREP_EMBED_MODEL": "Xenova/siglip-base-patch16-224",
+    "SHOTGREP_EMBED_PRECISION": "int8",
+}
 
 
 def run_ingest(
@@ -38,7 +46,7 @@ def run_ingest(
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,
-        env={**os.environ, **ASR_TEST_ENV, **(env or {})},
+        env={**os.environ, **TEST_ENV, **(env or {})},
     )
 
 
@@ -490,3 +498,132 @@ def test_asset_without_audio_gets_empty_transcript(tmp_path: Path) -> None:
     transcript = read_transcript(work)
     assert transcript["segments"] == []
     assert transcript["language"] is None
+
+
+def read_frames(work_dir: Path) -> dict:
+    return json.loads(read_artifact(work_dir, "frames.json"))
+
+
+def index_rows(work_dir: Path, table: str) -> list[dict]:
+    db = lancedb.connect(str(manifest_path(work_dir).parent.parent / "index"))
+    rows = db.open_table(table).to_arrow().to_pylist()
+    return sorted(rows, key=lambda row: row["id"])
+
+
+def test_frames_stage_samples_one_fps_shots_and_transcript(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    manifest = read_manifest(work)
+    assert manifest["status"] == "complete"
+    stage = manifest["stages"]["frames"]
+    assert stage["status"] == "complete"
+    assert stage["error"] is None
+    assert stage["outputs"]["artifact"] == "frames.json"
+
+    samples = read_frames(work)["samples"]
+    assert len(samples) == stage["outputs"]["count"]
+    times = [sample["time_s"] for sample in samples]
+    assert times == sorted(times)
+    assert len(set(times)) == len(times)
+
+    kinds = {kind for sample in samples for kind in sample["kinds"]}
+    assert kinds == {"frame", "shot_start", "transcript"}
+    sampled = {kind: {sample["time_s"] for sample in samples if kind in sample["kinds"]} for kind in kinds}
+    assert sampled["frame"] >= {1.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0}
+    shots = json.loads(read_artifact(work, "shots.json"))["shots"]
+    assert sampled["shot_start"] == {shot["start_s"] for shot in shots}
+    transcript = read_transcript(work)
+    assert sampled["transcript"] == {segment["start_s"] for segment in transcript["segments"]}
+
+    directory = manifest_path(work).parent
+    for sample in samples:
+        assert sample["thumbnail"] == f"thumbnails/{round(sample['time_s'] * 1000):08d}.jpg"
+        thumbnail = directory / sample["thumbnail"]
+        assert thumbnail.is_file(), f"missing thumbnail {sample['thumbnail']}"
+        assert thumbnail.read_bytes()[:2] == b"\xff\xd8"
+
+
+def test_embed_stage_embeds_every_frame_sample(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    manifest = read_manifest(work)
+    stage = manifest["stages"]["embed"]
+    assert stage["status"] == "complete"
+    assert stage["error"] is None
+    outputs = stage["outputs"]
+    assert outputs["artifact"] == "embeddings.npy"
+    assert outputs["precision"] == "int8"
+    assert outputs["dimension"] == 768
+    assert outputs["model"]
+    assert outputs["revision"]
+
+    embeddings = np.load(manifest_path(work).parent / "embeddings.npy")
+    samples = read_frames(work)["samples"]
+    assert outputs["count"] == len(samples)
+    assert embeddings.shape == (len(samples), outputs["dimension"])
+    assert embeddings.dtype == np.float32
+    assert np.allclose(np.linalg.norm(embeddings, axis=1), 1.0, atol=1e-3)
+
+
+def test_index_stage_holds_moments_of_every_kind(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    manifest = read_manifest(work)
+    stage = manifest["stages"]["index"]
+    assert stage["status"] == "complete"
+    assert stage["error"] is None
+    assert stage["outputs"]["index"] == "index"
+    assert stage["outputs"]["assets"] == 1
+
+    rows = index_rows(work, "moments")
+    assert len(rows) == stage["outputs"]["moments"]
+    assert {row["kind"] for row in rows} == {"frame", "shot_start", "transcript"}
+    assert {row["asset_id"] for row in rows} == {FIXTURE_SHA256}
+    embed = manifest["stages"]["embed"]["outputs"]
+    for row in rows:
+        assert len(row["embedding"]) == 768
+        assert (manifest_path(work).parent.parent / row["thumbnail"]).is_file()
+        assert row["embedding_model"] == embed["model"]
+        assert row["embedding_precision"] == embed["precision"]
+        assert row["embedding_revision"] == embed["revision"]
+
+    assets = index_rows(work, "assets")
+    assert [row["id"] for row in assets] == [FIXTURE_SHA256]
+    assert assets[0]["filename"] == "clip.mp4"
+    assert assets[0]["status"] == "indexed"
+    assert assets[0]["codec"] == "h264"
+    assert assets[0]["fps"] == pytest.approx(24.0, abs=0.01)
+    assert assets[0]["duration_s"] == pytest.approx(10.0, abs=0.1)
+
+
+def test_rerun_embed_and_index_is_idempotent(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    first = run_ingest(FIXTURE, work)
+    assert first.returncode == 0, first.stderr
+    before = read_manifest(work)
+    embeddings = read_artifact(work, "embeddings.npy")
+    frames = read_artifact(work, "frames.json")
+    moments = index_rows(work, "moments")
+    assets = index_rows(work, "assets")
+
+    second = run_ingest(FIXTURE, work, "--from-stage", "embed")
+    assert second.returncode == 0, second.stderr
+    after = read_manifest(work)
+    assert after["status"] == "complete"
+    assert after["stages"]["embed"]["outputs"] == before["stages"]["embed"]["outputs"]
+    assert after["stages"]["index"]["outputs"] == before["stages"]["index"]["outputs"]
+    assert read_artifact(work, "embeddings.npy") == embeddings
+    assert read_artifact(work, "frames.json") == frames
+    assert index_rows(work, "moments") == moments
+    assert index_rows(work, "assets") == assets
+
+    third = run_ingest(FIXTURE, work, "--from-stage", "index")
+    assert third.returncode == 0, third.stderr
+    assert read_manifest(work)["stages"]["index"]["outputs"] == before["stages"]["index"]["outputs"]
+    assert index_rows(work, "moments") == moments
