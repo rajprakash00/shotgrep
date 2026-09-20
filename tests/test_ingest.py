@@ -22,6 +22,9 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "clip.mp4"
 FIXTURE_SHA256 = hashlib.sha256(FIXTURE.read_bytes()).hexdigest()
+# Contract tests exercise the ASR seam cheaply: a tiny model on the CPU path.
+# The default in production is large-v3 with automatic CUDA detection.
+ASR_TEST_ENV = {"SHOTGREP_ASR_MODEL": "tiny", "SHOTGREP_ASR_DEVICE": "cpu"}
 
 
 def run_ingest(
@@ -35,7 +38,7 @@ def run_ingest(
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,
-        env=env,
+        env={**os.environ, **ASR_TEST_ENV, **(env or {})},
     )
 
 
@@ -51,6 +54,23 @@ def read_manifest(work_dir: Path) -> dict:
 
 def read_artifact(work_dir: Path, name: str) -> bytes:
     return (manifest_path(work_dir).parent / name).read_bytes()
+
+
+def read_transcript(work_dir: Path) -> dict:
+    return json.loads(read_artifact(work_dir, "transcript.json"))
+
+
+def transcript_words(transcript: dict) -> list[dict]:
+    return [word for segment in transcript["segments"] for word in segment["words"]]
+
+
+def transcript_shape(value: object) -> object:
+    """Structure only: dict keys and element types, ignoring list lengths and scalar values."""
+    if isinstance(value, dict):
+        return {key: transcript_shape(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [transcript_shape(value[0])] if value else []
+    return type(value).__name__
 
 
 def ffprobe_json(path: Path) -> dict:
@@ -162,6 +182,21 @@ def nvenc_works() -> bool:
     ]
     return subprocess.run(command, capture_output=True).returncode == 0
 
+
+@functools.lru_cache(maxsize=1)
+def cuda_works() -> bool:
+    import ctranslate2
+
+    if ctranslate2.get_cuda_device_count() == 0:
+        return False
+    from faster_whisper import WhisperModel
+
+    try:
+        model = WhisperModel("tiny", device="cuda", compute_type="int8")
+        segments, _ = model.transcribe(str(FIXTURE), word_timestamps=True)
+        return bool(list(segments))
+    except Exception:
+        return False
 
 
 def test_ingest_probes_fixture(tmp_path: Path) -> None:
@@ -349,3 +384,114 @@ def test_proxy_normalizes_odd_source_dimensions(tmp_path: Path) -> None:
     assert proxy_stream["width"] % 2 == 0
     assert proxy_stream["height"] % 2 == 0
     assert_playable_proxy(proxy, duration_s=1.0, has_audio=False)
+
+
+def test_asr_stage_transcribes_fixture_with_word_timestamps(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    manifest = read_manifest(work)
+    assert manifest["status"] == "complete"
+    asr = manifest["stages"]["asr"]
+    assert asr["status"] == "complete"
+    assert asr["error"] is None
+    assert asr["outputs"]["artifact"] == "transcript.json"
+    assert asr["outputs"]["model"] == "tiny"
+    assert asr["outputs"]["device"] == "cpu"
+    assert asr["outputs"]["words"] > 0
+
+    transcript = read_transcript(work)
+    words = transcript_words(transcript)
+    assert len(words) == asr["outputs"]["words"]
+    assert len(transcript["segments"]) == asr["outputs"]["segments"]
+    assert transcript["language"] == "en"
+    for word in words:
+        assert set(word) == {"word", "start_s", "end_s"}
+        assert 0.0 <= word["start_s"] <= word["end_s"] <= 10.1
+    starts = [word["start_s"] for word in words]
+    assert starts == sorted(starts)
+    spoken = {word["word"].strip(".,!?;:").lower() for word in words}
+    assert {"jerk", "robotics", "space"} <= spoken
+
+
+def test_cpu_path_produces_same_transcript_shape(tmp_path: Path) -> None:
+    cpu_work = tmp_path / "cpu"
+    auto_work = tmp_path / "auto"
+    cpu_run = run_ingest(FIXTURE, cpu_work, env={"SHOTGREP_ASR_DEVICE": "cpu"})
+    auto_run = run_ingest(FIXTURE, auto_work, env={"SHOTGREP_ASR_DEVICE": "auto"})
+    assert cpu_run.returncode == 0, cpu_run.stderr
+    assert auto_run.returncode == 0, auto_run.stderr
+
+    assert read_manifest(cpu_work)["stages"]["asr"]["outputs"]["device"] == "cpu"
+    cpu_transcript = read_transcript(cpu_work)
+    auto_transcript = read_transcript(auto_work)
+    assert set(cpu_transcript) == {"compute_type", "device", "language", "language_probability", "model", "segments"}
+    assert transcript_words(cpu_transcript)
+    assert transcript_shape(cpu_transcript) == transcript_shape(auto_transcript)
+
+
+def test_cuda_request_without_a_device_falls_back_to_cpu(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    env = {"SHOTGREP_ASR_DEVICE": "cuda", "CUDA_VISIBLE_DEVICES": ""}
+    result = run_ingest(FIXTURE, work, env=env)
+    assert result.returncode == 0, result.stderr
+
+    manifest = read_manifest(work)
+    assert manifest["status"] == "complete"
+    outputs = manifest["stages"]["asr"]["outputs"]
+    assert outputs["device"] == "cpu"
+    assert "cuda" in outputs["fallback_reason"].lower()
+    assert transcript_words(read_transcript(work))
+
+
+@pytest.mark.skipif(not cuda_works(), reason="no working CUDA device on this machine")
+def test_cuda_transcription_when_available(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work, env={"SHOTGREP_ASR_DEVICE": "auto"})
+    assert result.returncode == 0, result.stderr
+
+    outputs = read_manifest(work)["stages"]["asr"]["outputs"]
+    assert outputs["device"] == "cuda"
+    assert "fallback_reason" not in outputs
+    assert transcript_words(read_transcript(work))
+
+
+def test_asr_stage_is_idempotent(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    first = run_ingest(FIXTURE, work)
+    assert first.returncode == 0, first.stderr
+    transcript = manifest_path(work).parent / "transcript.json"
+    before = read_artifact(work, "transcript.json")
+    transcript_mtime = transcript.stat().st_mtime_ns
+
+    second = run_ingest(FIXTURE, work)
+    assert second.returncode == 0, second.stderr
+    assert read_artifact(work, "transcript.json") == before
+    assert transcript.stat().st_mtime_ns == transcript_mtime
+
+    third = run_ingest(FIXTURE, work, "--from-stage", "asr")
+    assert third.returncode == 0, third.stderr
+    assert read_artifact(work, "transcript.json") == before
+    manifest = read_manifest(work)
+    assert manifest["status"] == "complete"
+    assert manifest["stages"]["asr"]["status"] == "complete"
+
+
+def test_asset_without_audio_gets_empty_transcript(tmp_path: Path) -> None:
+    source = tmp_path / "silent.mkv"
+    write_odd_clip(source)
+    work = tmp_path / "work"
+    result = run_ingest(source, work)
+    assert result.returncode == 0, result.stderr
+
+    manifest = read_manifest(work)
+    assert manifest["status"] == "complete"
+    outputs = manifest["stages"]["asr"]["outputs"]
+    assert outputs["artifact"] == "transcript.json"
+    assert outputs["segments"] == 0
+    assert outputs["words"] == 0
+
+    transcript = read_transcript(work)
+    assert transcript["segments"] == []
+    assert transcript["language"] is None
