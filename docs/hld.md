@@ -48,13 +48,14 @@ Stage order: `probe → proxy → shots → asr → frames → embed → index`.
 
 ## Agent surface (MCP)
 
-- `search_moments(query, k, asset?, time_range?)`
-- `get_moment(id)`
-- `get_transcript(asset, from, to)`
+- `search_moments(query, k?, asset?, start_s?, end_s?)`
+- `get_moment(moment_id)`
+- `get_transcript(asset_id, start_s?, end_s?)`
 - `list_assets()`
 - Stretch: `save_selection(ids, label)` → EDL/CSV.
 
-Tools return compact structured results with absolute timestamps and deep links. No answer tool — the agent composes.
+Tools return compact structured results with absolute timestamps and deep links.
+No answer tool — the agent composes.
 
 ## Failure model
 

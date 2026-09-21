@@ -1,7 +1,7 @@
 """CLI search: a thin adapter over the shared query service.
 
-The CLI, the REST API, and (later) the MCP tools all call QueryService, so one
-result contract covers every surface. This module only maps the work directory
+The CLI, the REST API, and the MCP tools all call QueryService, so one result
+contract covers every surface. This module only maps the work directory
 convention to the service's index directory.
 """
 

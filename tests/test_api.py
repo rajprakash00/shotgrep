@@ -298,6 +298,19 @@ def test_asset_lookup_unknown_id_is_404(client: TestClient) -> None:
     assert "nope" in response.json()["detail"]
 
 
+def test_asset_list_returns_every_indexed_asset(client: TestClient, second_clip: Path) -> None:
+    blue = hashlib.sha256(second_clip.read_bytes()).hexdigest()
+    response = client.get("/assets")
+    assert response.status_code == 200, response.text
+    assets = response.json()["assets"]
+    assert [asset["filename"] for asset in assets] == ["blue.mp4", "clip.mp4"]
+    assert {asset["asset_id"] for asset in assets} == {FIXTURE_SHA256, blue}
+    for asset in assets:
+        assert set(asset) == ASSET_KEYS
+        assert asset["status"] == "indexed"
+        assert asset["proxy_url"] == f"{API_URL}/media/{asset['asset_id']}/proxy.mp4"
+
+
 def test_proxy_is_served_with_range_support(client: TestClient) -> None:
     asset = client.get(f"/assets/{FIXTURE_SHA256}").json()
     path = urlparse(asset["proxy_url"]).path
