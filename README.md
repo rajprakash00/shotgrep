@@ -6,7 +6,8 @@ Ask for a moment in plain language — *"the part where he parks the bike at nig
 
 **Status:** early build. Ingest produces a searchable index; the CLI and REST
 API answer fused visual + transcript queries and serve moment thumbnails and
-transcripts; the web player and eval harness are under construction.
+transcripts; the eval harness publishes [frozen-split results](eval/RESULTS.md);
+the web player is under construction.
 
 ## Planned surface
 
@@ -18,6 +19,8 @@ transcripts; the web player and eval harness are under construction.
 ## Docs
 
 - [Spec](SPEC.md)
+- [Eval results](eval/RESULTS.md)
+- [Eval analysis](eval/ANALYSIS.md)
 - [Tech stack](docs/tech-stack.md)
 - [High-level design](docs/hld.md)
 - [Folder structure](docs/folder-structure.md)
@@ -55,7 +58,13 @@ uv run ruff check .  # lint
 uv run shotgrep ingest <file> --work-dir work
 uv run shotgrep search "the part where he parks the bike at night" --work-dir work
 uv run shotgrep serve --work-dir work   # REST on http://localhost:8000
+uv run python -m eval --index work/index  # Recall@5/MRR/latency vs baseline
 ```
+
+The eval harness measures Recall@5, MRR, and p50/p95 latency over frozen query
+splits and compares fused search against a single-stage visual baseline on the
+same index. It is a quality gate, not a CI test; committed tables and the freeze
+rule live in [eval/RESULTS.md](eval/RESULTS.md).
 
 The REST endpoints are `GET /search`, `GET /moments/{id}`, and
 `GET /assets/{id}/transcript`; thumbnails are served from `/media`. Results

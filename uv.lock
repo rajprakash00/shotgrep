@@ -867,6 +867,7 @@ cuda = [
 ]
 dev = [
     { name = "pytest" },
+    { name = "pyyaml" },
     { name = "ruff" },
 ]
 
@@ -890,6 +891,7 @@ requires-dist = [
 cuda = [{ name = "nvidia-cublas-cu12", specifier = ">=12.9.2.10" }]
 dev = [
     { name = "pytest", specifier = ">=8.3" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.9" },
 ]
 
