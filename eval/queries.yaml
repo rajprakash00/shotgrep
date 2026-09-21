@@ -1,0 +1,415 @@
+# Frozen eval query set for shotgrep v1 (SPEC.md).
+#
+# Freeze rule: once ranking work starts, these labels and the tolerance are
+# frozen. A later ranking or pipeline change must not edit them; it appends a
+# dated table to eval/RESULTS.md instead (docs/folder-structure.md).
+#
+# Each query names one moment in one corpus asset. `start_s`/`end_s` is the
+# labeled moment; a result counts when its time range overlaps that range
+# expanded by `tolerance_s` (SPEC.md: +/- 2s).
+#
+# Splits:
+#   easy       - a direct description of the moment, using its likely words
+#   paraphrase - the same kind of target described indirectly
+#   temporal   - the target is named through its place in time
+#   negation   - the target is named by what is absent from it
+#
+# Labels were placed against the built corpus index (transcripts and sampled
+# thumbnails); every moment was verified frame by frame before the freeze.
+
+version: 1
+frozen_on: "2026-09-21"
+tolerance_s: 2.0
+
+queries:
+  # Big Buck Bunny - no dialogue; every label is a visual moment.
+  - id: easy-01
+    split: easy
+    text: a rabbit sleeping inside a burrow
+    asset: big-buck-bunny
+    start_s: 36.0
+    end_s: 42.0
+  - id: easy-02
+    split: easy
+    text: three small rodents standing together in a meadow
+    asset: big-buck-bunny
+    start_s: 118.0
+    end_s: 120.9
+  - id: easy-03
+    split: easy
+    text: a rabbit rolling on the grass with a butterfly
+    asset: big-buck-bunny
+    start_s: 76.0
+    end_s: 79.9
+  - id: easy-04
+    split: easy
+    text: a squirrel balancing on a tree branch with its arms out
+    asset: big-buck-bunny
+    start_s: 400.0
+    end_s: 406.0
+  - id: paraphrase-01
+    split: paraphrase
+    text: a fluffy grey animal waking up underground
+    asset: big-buck-bunny
+    start_s: 44.0
+    end_s: 47.0
+  - id: paraphrase-02
+    split: paraphrase
+    text: a small woodland creature soaring through the air
+    asset: big-buck-bunny
+    start_s: 430.8
+    end_s: 435.5
+  - id: paraphrase-03
+    split: paraphrase
+    text: a big orange fruit hanging from a branch
+    asset: big-buck-bunny
+    start_s: 413.0
+    end_s: 415.9
+  - id: paraphrase-04
+    split: paraphrase
+    text: a bird flapping its wings on a tree branch
+    asset: big-buck-bunny
+    start_s: 17.0
+    end_s: 21.0
+  - id: temporal-01
+    split: temporal
+    text: the opening title card of the film
+    asset: big-buck-bunny
+    start_s: 25.0
+    end_s: 29.0
+  - id: temporal-02
+    split: temporal
+    text: the final moment before the end credits, a rabbit smiling at the camera
+    asset: big-buck-bunny
+    start_s: 487.0
+    end_s: 490.0
+  - id: temporal-03
+    split: temporal
+    text: the scene right after the rabbit wakes up, stretching outside its burrow
+    asset: big-buck-bunny
+    start_s: 50.0
+    end_s: 55.0
+  - id: temporal-04
+    split: temporal
+    text: the moment the trap is revealed, sharp wooden spikes in the ground
+    asset: big-buck-bunny
+    start_s: 421.0
+    end_s: 424.0
+  - id: negation-01
+    split: negation
+    text: a landscape with trees and clouds but no animals
+    asset: big-buck-bunny
+    start_s: 372.7
+    end_s: 375.4
+  - id: negation-02
+    split: negation
+    text: a quiet forest with nobody moving
+    asset: big-buck-bunny
+    start_s: 464.0
+    end_s: 468.0
+  - id: negation-03
+    split: negation
+    text: rodents laughing with no rabbit in the shot
+    asset: big-buck-bunny
+    start_s: 160.0
+    end_s: 167.0
+  - id: negation-04
+    split: negation
+    text: a dark burrow entrance with no rabbit outside
+    asset: big-buck-bunny
+    start_s: 32.0
+    end_s: 34.0
+
+  # Sintel - sparse dialogue plus long visual stretches.
+  - id: easy-05
+    split: easy
+    text: a woman saying she is searching for someone
+    asset: sintel
+    start_s: 134.0
+    end_s: 137.0
+  - id: easy-06
+    split: easy
+    text: an old man asking about a dragon
+    asset: sintel
+    start_s: 142.0
+    end_s: 144.0
+  - id: easy-07
+    split: easy
+    text: a baby dragon with its mouth wide open
+    asset: sintel
+    start_s: 200.0
+    end_s: 205.0
+  - id: easy-08
+    split: easy
+    text: a dragon flying over a city at sunset
+    asset: sintel
+    start_s: 315.0
+    end_s: 325.0
+  - id: paraphrase-05
+    split: paraphrase
+    text: a woman telling a stranger she has always been by herself
+    asset: sintel
+    start_s: 152.0
+    end_s: 156.0
+  - id: paraphrase-06
+    split: paraphrase
+    text: a winged creature perched above the rooftops
+    asset: sintel
+    start_s: 302.0
+    end_s: 310.0
+  - id: paraphrase-07
+    split: paraphrase
+    text: a tiny reptile on a city street being picked up
+    asset: sintel
+    start_s: 195.0
+    end_s: 200.0
+  - id: paraphrase-08
+    split: paraphrase
+    text: a woman lying on the ground in a dark cave
+    asset: sintel
+    start_s: 580.0
+    end_s: 595.0
+  - id: temporal-05
+    split: temporal
+    text: the moment right after the duel, a woman sitting in the snow
+    asset: sintel
+    start_s: 60.0
+    end_s: 65.0
+  - id: temporal-06
+    split: temporal
+    text: a woman walking through the snow right before the fight
+    asset: sintel
+    start_s: 36.0
+    end_s: 43.0
+  - id: temporal-07
+    split: temporal
+    text: the final shot before the credits, a woman standing among white flowers
+    asset: sintel
+    start_s: 714.0
+    end_s: 734.0
+  - id: temporal-08
+    split: temporal
+    text: the scene after the dragon dies, a woman sitting by a giant tree at sunset
+    asset: sintel
+    start_s: 685.0
+    end_s: 700.0
+  - id: negation-05
+    split: negation
+    text: a frozen mountain landscape with nobody in sight
+    asset: sintel
+    start_s: 82.0
+    end_s: 85.9
+  - id: negation-06
+    split: negation
+    text: a hut interior with no dragon inside
+    asset: sintel
+    start_s: 128.0
+    end_s: 140.0
+  - id: negation-07
+    split: negation
+    text: a desert with no trees or buildings
+    asset: sintel
+    start_s: 365.0
+    end_s: 375.0
+  - id: negation-08
+    split: negation
+    text: a dark cave with no fire burning
+    asset: sintel
+    start_s: 520.0
+    end_s: 535.0
+
+  # Tears of Steel - dialogue-heavy; several labels anchor to spoken lines.
+  - id: easy-09
+    split: easy
+    text: two people arguing on a bridge
+    asset: tears-of-steel
+    start_s: 25.0
+    end_s: 29.0
+  - id: easy-10
+    split: easy
+    text: a man asking whether a woman is freaked out by his robot hand
+    asset: tears-of-steel
+    start_s: 30.0
+    end_s: 34.0
+  - id: easy-11
+    split: easy
+    text: a robot's memory being synced and locked
+    asset: tears-of-steel
+    start_s: 50.0
+    end_s: 53.0
+  - id: easy-12
+    split: easy
+    text: a film crew counting down before the cameras roll
+    asset: tears-of-steel
+    start_s: 191.0
+    end_s: 205.0
+  - id: paraphrase-09
+    split: paraphrase
+    text: a couple repeating their argument for the cameras
+    asset: tears-of-steel
+    start_s: 315.0
+    end_s: 327.0
+  - id: paraphrase-10
+    split: paraphrase
+    text: someone coaching a man to show his love
+    asset: tears-of-steel
+    start_s: 235.0
+    end_s: 247.0
+  - id: paraphrase-11
+    split: paraphrase
+    text: a machine arm reaching for a young man's face
+    asset: tears-of-steel
+    start_s: 380.0
+    end_s: 395.0
+  - id: paraphrase-12
+    split: paraphrase
+    text: a ruined city after a machine uprising
+    asset: tears-of-steel
+    start_s: 70.0
+    end_s: 80.0
+  - id: temporal-09
+    split: temporal
+    text: the title card announcing the story jumps forty years
+    asset: tears-of-steel
+    start_s: 43.0
+    end_s: 45.6
+  - id: temporal-10
+    split: temporal
+    text: the moment right after the director shouts action
+    asset: tears-of-steel
+    start_s: 292.0
+    end_s: 296.0
+  - id: temporal-11
+    split: temporal
+    text: the final scene after the credits, a woman walking among robots
+    asset: tears-of-steel
+    start_s: 715.0
+    end_s: 734.0
+  - id: temporal-12
+    split: temporal
+    text: the last shot before the end credits begin
+    asset: tears-of-steel
+    start_s: 583.0
+    end_s: 589.0
+  - id: negation-09
+    split: negation
+    text: a bridge with no people crossing it
+    asset: tears-of-steel
+    start_s: 222.4
+    end_s: 225.1
+  - id: negation-10
+    split: negation
+    text: a bunker full of soldiers with no one speaking
+    asset: tears-of-steel
+    start_s: 98.2
+    end_s: 102.4
+  - id: negation-11
+    split: negation
+    text: a bridge scene with no machines in sight
+    asset: tears-of-steel
+    start_s: 349.0
+    end_s: 351.5
+  - id: negation-12
+    split: negation
+    text: a quiet canal street with no robots around
+    asset: tears-of-steel
+    start_s: 260.0
+    end_s: 270.0
+
+  # Elephants Dream - dialogue between a guide and his companion.
+  - id: easy-13
+    split: easy
+    text: two men walking through a corridor with green walls
+    asset: elephants-dream
+    start_s: 435.0
+    end_s: 448.0
+  - id: easy-14
+    split: easy
+    text: a young man in a red room with hanging cables
+    asset: elephants-dream
+    start_s: 213.5
+    end_s: 216.5
+  - id: easy-15
+    split: easy
+    text: an old man showing a small object to a young man
+    asset: elephants-dream
+    start_s: 410.0
+    end_s: 420.0
+  - id: easy-16
+    split: easy
+    text: a young man lying on the ground surrounded by cables
+    asset: elephants-dream
+    start_s: 540.0
+    end_s: 545.0
+  - id: paraphrase-13
+    split: paraphrase
+    text: an elderly guide leading his companion across a rope bridge in the dark
+    asset: elephants-dream
+    start_s: 100.0
+    end_s: 115.0
+  - id: paraphrase-14
+    split: paraphrase
+    text: two figures on a dark stage lit by a single spotlight
+    asset: elephants-dream
+    start_s: 260.0
+    end_s: 280.0
+  - id: paraphrase-15
+    split: paraphrase
+    text: a vast field of golden wires
+    asset: elephants-dream
+    start_s: 520.0
+    end_s: 535.0
+  - id: paraphrase-16
+    split: paraphrase
+    text: an endless expanse of typewriter keys
+    asset: elephants-dream
+    start_s: 395.0
+    end_s: 405.0
+  - id: temporal-13
+    split: temporal
+    text: the opening title card with the film's name on parchment
+    asset: elephants-dream
+    start_s: 12.0
+    end_s: 22.0
+  - id: temporal-14
+    split: temporal
+    text: the scene right after the pair cross the rope bridge, a red room with a spotlight
+    asset: elephants-dream
+    start_s: 155.0
+    end_s: 165.0
+  - id: temporal-15
+    split: temporal
+    text: the moment right after the old man shouts hurry, the pair on a cable bridge
+    asset: elephants-dream
+    start_s: 131.0
+    end_s: 140.0
+  - id: temporal-16
+    split: temporal
+    text: the last shot before the credits, a tangle of cables in the dark
+    asset: elephants-dream
+    start_s: 548.0
+    end_s: 565.0
+  - id: negation-13
+    split: negation
+    text: a plain corridor with no machines in sight
+    asset: elephants-dream
+    start_s: 420.0
+    end_s: 428.0
+  - id: negation-14
+    split: negation
+    text: a tunnel of machinery with nobody inside
+    asset: elephants-dream
+    start_s: 350.0
+    end_s: 365.0
+  - id: negation-15
+    split: negation
+    text: an empty red room with nobody inside
+    asset: elephants-dream
+    start_s: 155.0
+    end_s: 165.0
+  - id: negation-16
+    split: negation
+    text: a giant metal screw with no people around
+    asset: elephants-dream
+    start_s: 335.0
+    end_s: 342.0
