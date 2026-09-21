@@ -20,6 +20,7 @@ the web player is under construction.
 
 - [Spec](SPEC.md)
 - [Eval results](eval/RESULTS.md)
+- [Eval analysis](eval/ANALYSIS.md)
 - [Tech stack](docs/tech-stack.md)
 - [High-level design](docs/hld.md)
 - [Folder structure](docs/folder-structure.md)

@@ -43,6 +43,7 @@ def render_markdown(report: Report) -> str:
             f"Index: {_index_text(report.index)}."
         ),
         f"Reproduce with `{report.command}`.",
+        "Analysis and next actions: [eval/ANALYSIS.md](ANALYSIS.md).",
         "",
         FREEZE_NOTE,
         "",

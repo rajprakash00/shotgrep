@@ -234,6 +234,7 @@ def test_render_markdown_commits_the_run_as_a_dated_table() -> None:
     assert "a" * 64 in text
     assert "b" * 64 in text
     assert "Xenova/siglip-base-patch16-224" in text
+    assert "[eval/ANALYSIS.md](ANALYSIS.md)" in text
     assert "## 2026-09-20" in text
     assert "| System | Split | N | Recall@5 | MRR | p50 (ms) | p95 (ms) |" in text
     assert "| shipped fused | overall | 60 | 0.720 | 0.543 | 120 | 211 |" in text
