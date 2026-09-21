@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -20,6 +21,7 @@ from pipeline.errors import IngestError
 from pipeline.stages.index import INDEX_DIR
 
 WORK_DIR_ENV = "SHOTGREP_WORK_DIR"
+CORS_ORIGINS_ENV = "SHOTGREP_CORS_ORIGINS"
 DEFAULT_WORK_DIR = "work"
 MAX_K = 100
 
@@ -34,6 +36,12 @@ def create_app(
     service = QueryService(base / INDEX_DIR, api_url=api_url, web_url=web_url)
     app = FastAPI(title="shotgrep", version="0.1.0", description="Search video like it's text.")
     app.state.service = service
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins(service.web_url),
+        allow_methods=["GET"],
+        allow_headers=["*"],
+    )
     app.mount(
         "/media",
         StaticFiles(directory=str(service.index_dir), check_dir=False),
@@ -66,6 +74,10 @@ def create_app(
     def moment(moment_id: str) -> dict:
         return service.moment(moment_id)
 
+    @app.get("/assets/{asset_id}")
+    def asset(asset_id: str) -> dict:
+        return service.asset(asset_id)
+
     @app.get("/assets/{asset_id}/transcript")
     def transcript(
         asset_id: str,
@@ -75,3 +87,10 @@ def create_app(
         return service.transcript(asset_id, start_s=start_s, end_s=end_s)
 
     return app
+
+
+def _cors_origins(web_url: str) -> list[str]:
+    """The web app's origin; SHOTGREP_CORS_ORIGINS overrides for preview URLs."""
+    configured = os.environ.get(CORS_ORIGINS_ENV, "")
+    origins = [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return origins or [web_url]

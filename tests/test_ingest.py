@@ -605,6 +605,18 @@ def test_index_stage_holds_moments_of_every_kind(tmp_path: Path) -> None:
     assert assets[0]["duration_s"] == pytest.approx(10.0, abs=0.1)
 
 
+def test_index_stage_carries_the_proxy_for_playback(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    index_dir = manifest_path(work).parent.parent / "index"
+    proxy = index_dir / FIXTURE_SHA256 / "proxy.mp4"
+    assert proxy.is_file(), "the built index must carry the playback proxy"
+    assert proxy.read_bytes() == read_artifact(work, "proxy.mp4")
+    assert_playable_proxy(proxy, duration_s=10.0)
+
+
 def test_index_stage_holds_transcript_segments_with_words(tmp_path: Path) -> None:
     work = tmp_path / "work"
     result = run_ingest(FIXTURE, work)

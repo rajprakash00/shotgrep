@@ -4,17 +4,16 @@ Search video like it's text.
 
 Ask for a moment in plain language — *"the part where he parks the bike at night"* — and get the exact frame back, with jump-to-timestamp links.
 
-**Status:** early build. Ingest produces a searchable index; the CLI and REST
-API answer fused visual + transcript queries and serve moment thumbnails and
-transcripts; the eval harness publishes [frozen-split results](eval/RESULTS.md);
-the web player is under construction.
+**Status:** early build. Ingest produces a searchable index; the CLI, REST API, and
+web player answer fused visual + transcript queries; the eval harness publishes
+[frozen-split results](eval/RESULTS.md).
 
-## Planned surface
+## Surface
 
 - **Ingest** local footage: proxy transcode, shot detection, transcript with word timestamps, visual embeddings
 - **Search**: fused transcript + visual retrieval, moment-level results (±1-3s), ANN over a LanceDB index
 - **Watch**: browser player that opens results at the right frame
-- **Agents**: the index exposed as MCP tools so an agent can search, fetch moments, and read transcripts
+- **Agents** (planned): the index exposed as MCP tools so an agent can search, fetch moments, and read transcripts
 
 ## Docs
 
@@ -66,11 +65,25 @@ splits and compares fused search against a single-stage visual baseline on the
 same index. It is a quality gate, not a CI test; committed tables and the freeze
 rule live in [eval/RESULTS.md](eval/RESULTS.md).
 
-The REST endpoints are `GET /search`, `GET /moments/{id}`, and
-`GET /assets/{id}/transcript`; thumbnails are served from `/media`. Results
-carry deep links shaped `{SHOTGREP_WEB_URL}/watch/{asset_id}?t={seconds}`,
-defaulting to `http://localhost:3000` (see
+The REST endpoints are `GET /search`, `GET /moments/{id}`, `GET /assets/{id}`, and
+`GET /assets/{id}/transcript`; thumbnails and playback proxies are served from
+`/media`. Results carry deep links shaped
+`{SHOTGREP_WEB_URL}/watch/{asset_id}?t={seconds}`, defaulting to
+`http://localhost:3000` (see
 [docs/adr](docs/adr/0002-read-contract-urls-and-deep-links.md)).
+
+The web player lives in `web/` (Next.js). Run the API on `http://localhost:8000`,
+then:
+
+```sh
+cd web
+pnpm install
+pnpm dev   # http://localhost:3000
+```
+
+`NEXT_PUBLIC_API_URL` points the app at another API origin;
+`SHOTGREP_CORS_ORIGINS` (comma-separated) widens the API's CORS allowlist beyond
+`SHOTGREP_WEB_URL` for preview deployments.
 
 ASR defaults to `large-v3` int8 on CUDA when a device is available, CPU
 otherwise. Override with `SHOTGREP_ASR_MODEL` and `SHOTGREP_ASR_DEVICE`

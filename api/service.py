@@ -107,6 +107,20 @@ class QueryService:
             raise NotFoundError(f"no moment {moment_id!r} in the index")
         return self._result(as_hit(rows[0]), None)
 
+    def asset(self, asset_id: str) -> dict:
+        """Asset metadata plus the public URL of its playback proxy."""
+        self._prepare_tables()
+        row = self._asset(asset_id)
+        return {
+            "asset_id": row["id"],
+            "filename": row["filename"],
+            "duration_s": float(row["duration_s"]),
+            "fps": float(row["fps"]),
+            "codec": row["codec"],
+            "status": row["status"],
+            "proxy_url": self._media_url(f"{row['id']}/proxy.mp4"),
+        }
+
     def transcript(
         self,
         asset_id: str,
@@ -193,11 +207,14 @@ class QueryService:
             "kind": hit.kind,
             "start_s": hit.start_s,
             "end_s": hit.end_s,
-            "thumbnail_url": f"{self.api_url}/media/{hit.thumbnail}",
+            "thumbnail_url": self._media_url(hit.thumbnail),
             "snippet": hit.snippet,
             "score": score if score is None else round(score, 6),
             "deep_link": self._deep_link(hit),
         }
+
+    def _media_url(self, relative_path: str) -> str:
+        return f"{self.api_url}/media/{relative_path}"
 
     def _deep_link(self, hit: Hit) -> str:
         return f"{self.web_url}/watch/{hit.asset_id}?t={_timestamp(hit.start_s)}"
