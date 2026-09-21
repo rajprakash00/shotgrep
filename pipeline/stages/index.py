@@ -1,14 +1,16 @@
 """Index stage: replace this asset's rows in the shared LanceDB index.
 
 Reads frames.json, embeddings.npy, shots.json, transcript.json, probe.json,
-and the asset's manifest. Rows for this asset are deleted and rewritten, so
-rerunning is idempotent and other assets in the index are untouched. Every
-moment records the embedding model, precision, and revision that produced it,
-so a model change is a re-embed rather than a full re-ingest. Transcript
-segments with word timestamps and the moment thumbnails are indexed too, so
-search, lookup, and range reads are served from the index alone (the demo
-deploys the built index, not the work directory). See
-pipeline/stages/__init__.py for the stage protocol.
+proxy.mp4, and the asset's manifest. Rows for this asset are deleted and
+rewritten, so rerunning is idempotent and other assets in the index are
+untouched. Every moment records the embedding model, precision, and revision
+that produced it, so a model change is a re-embed rather than a full re-ingest.
+Transcript segments with word timestamps and the moment thumbnails are indexed
+too, so search, lookup, and range reads are served from the index alone (the
+demo deploys the built index, not the work directory). The playback proxy is
+mirrored into the index alongside the thumbnails, so the web player plays from
+the same self-contained artifact. See pipeline/stages/__init__.py for the stage
+protocol.
 """
 
 from __future__ import annotations
@@ -28,12 +30,13 @@ INDEX_DIR = "index"
 MOMENTS = "moments"
 ASSETS = "assets"
 TRANSCRIPTS = "transcripts"
-INDEX_VERSION = 2
+INDEX_VERSION = 3
 FRAMES_ARTIFACT = "frames.json"
 EMBED_ARTIFACT = "embeddings.npy"
 SHOTS_ARTIFACT = "shots.json"
 TRANSCRIPT_ARTIFACT = "transcript.json"
 PROBE_ARTIFACT = "probe.json"
+PROXY_ARTIFACT = "proxy.mp4"
 MANIFEST = "manifest.json"
 
 ASSET_SCHEMA = pa.schema(
@@ -86,6 +89,7 @@ def run(source: Path, out_dir: Path) -> dict:
     index_dir = out_dir.parent / INDEX_DIR
     _write(index_dir, asset, probe, moments, embeddings.shape[1], segments)
     _copy_thumbnails(out_dir, index_dir, asset["id"], frames["samples"])
+    _copy_proxy(out_dir, index_dir, asset["id"])
     return {"index": INDEX_DIR, "moments": len(moments), "assets": 1}
 
 
@@ -171,11 +175,22 @@ def _write(
 
 def _copy_thumbnails(out_dir: Path, index_dir: Path, asset_id: str, samples: list[dict]) -> None:
     """Mirror the sampled thumbnails into the index so it serves on its own."""
-    target = index_dir / asset_id / "thumbnails"
-    target.mkdir(parents=True, exist_ok=True)
     for sample in samples:
         name = Path(sample["thumbnail"]).name
-        shutil.copy2(out_dir / sample["thumbnail"], target / name)
+        _mirror(out_dir / sample["thumbnail"], index_dir / asset_id / "thumbnails" / name)
+
+
+def _copy_proxy(out_dir: Path, index_dir: Path, asset_id: str) -> None:
+    """Mirror the playback proxy into the index: the web player streams from it."""
+    source = out_dir / PROXY_ARTIFACT
+    if not source.is_file():
+        raise IngestError(f"{PROXY_ARTIFACT} is missing; run the proxy stage first")
+    _mirror(source, index_dir / asset_id / PROXY_ARTIFACT)
+
+
+def _mirror(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
 
 
 def _transcript_rows(asset_id: str, segments: list[dict]) -> list[dict]:

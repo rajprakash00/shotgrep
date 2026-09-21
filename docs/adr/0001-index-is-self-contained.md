@@ -28,3 +28,20 @@ another version and names the missing tables.
 - The index carries duplicated thumbnails (small JPEGs); work artifacts remain
   the source for reruns.
 - A schema change now means a re-index, not only a re-embed.
+
+## Addendum: the index carries the playback proxy
+
+Status: accepted (2026-09-21)
+
+The web player (#9) opens each result's playback proxy at a moment, and the
+proxy only existed in `work/{asset_id}/proxy.mp4`, so an index served without
+the work directory had nothing to play.
+
+The index stage now mirrors `proxy.mp4` to `index/{asset_id}/proxy.mp4`, next
+to the thumbnails, and `INDEX_VERSION` moves to 3. The query service exposes
+its public URL as `proxy_url` through asset lookup (`GET /assets/{asset_id}`),
+built from `SHOTGREP_API_URL` exactly like `thumbnail_url`.
+
+Playback therefore joins search on the self-contained index, at the cost of a
+larger committed index: hosting the demo media is settled in the ship ticket
+(#11).

@@ -38,6 +38,15 @@ RESULT_KEYS = {
     "score",
     "deep_link",
 }
+ASSET_KEYS = {
+    "asset_id",
+    "filename",
+    "duration_s",
+    "fps",
+    "codec",
+    "status",
+    "proxy_url",
+}
 TEST_ENV = {
     "SHOTGREP_ASR_MODEL": "tiny",
     "SHOTGREP_ASR_DEVICE": "cpu",
@@ -111,7 +120,7 @@ def search(client: TestClient, query: str, **params: object) -> dict:
     return response.json()
 
 
-def thumbnail_file(work_dir: Path, url: str) -> Path:
+def media_file(work_dir: Path, url: str) -> Path:
     assert url.startswith(f"{API_URL}/media/"), url
     return work_dir / "index" / url.removeprefix(f"{API_URL}/media/")
 
@@ -201,7 +210,7 @@ def test_search_matches_the_cli_read_contract(client: TestClient, work_dir: Path
 
 def test_thumbnails_are_served_at_the_result_url(client: TestClient, work_dir: Path) -> None:
     result = search(client, "a bridge", k=1)["results"][0]
-    assert thumbnail_file(work_dir, result["thumbnail_url"]).is_file()
+    assert media_file(work_dir, result["thumbnail_url"]).is_file()
     response = client.get(urlparse(result["thumbnail_url"]).path)
     assert response.status_code == 200
     assert response.content[:2] == b"\xff\xd8"
@@ -221,7 +230,7 @@ def test_moment_lookup_returns_the_indexed_moment(client: TestClient, work_dir: 
     assert "robotics" in moment["snippet"]
     assert moment["score"] is None
     assert moment["deep_link"] == f"{WEB_URL}/watch/{FIXTURE_SHA256}?t=4.44"
-    assert thumbnail_file(work_dir, moment["thumbnail_url"]).is_file()
+    assert media_file(work_dir, moment["thumbnail_url"]).is_file()
 
 
 def test_moment_lookup_unknown_id_is_404(client: TestClient) -> None:
@@ -266,6 +275,55 @@ def test_transcript_range_unknown_asset_is_404(client: TestClient) -> None:
     response = client.get("/assets/nope/transcript")
     assert response.status_code == 404
     assert "nope" in response.json()["detail"]
+
+
+def test_asset_lookup_returns_the_playback_proxy(client: TestClient, work_dir: Path) -> None:
+    response = client.get(f"/assets/{FIXTURE_SHA256}")
+    assert response.status_code == 200, response.text
+    asset = response.json()
+    assert set(asset) == ASSET_KEYS
+    assert asset["asset_id"] == FIXTURE_SHA256
+    assert asset["filename"] == "clip.mp4"
+    assert asset["duration_s"] == pytest.approx(10.0, abs=0.1)
+    assert asset["fps"] == pytest.approx(24.0, abs=0.01)
+    assert asset["codec"] == "h264"
+    assert asset["status"] == "indexed"
+    assert asset["proxy_url"] == f"{API_URL}/media/{FIXTURE_SHA256}/proxy.mp4"
+    assert media_file(work_dir, asset["proxy_url"]).is_file()
+
+
+def test_asset_lookup_unknown_id_is_404(client: TestClient) -> None:
+    response = client.get("/assets/nope")
+    assert response.status_code == 404
+    assert "nope" in response.json()["detail"]
+
+
+def test_proxy_is_served_with_range_support(client: TestClient) -> None:
+    asset = client.get(f"/assets/{FIXTURE_SHA256}").json()
+    path = urlparse(asset["proxy_url"]).path
+    response = client.get(path)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.content[4:8] == b"ftyp"
+
+    partial = client.get(path, headers={"Range": "bytes=0-15"})
+    assert partial.status_code == 206
+    assert len(partial.content) == 16
+    assert partial.headers["content-range"].startswith("bytes 0-15/")
+
+
+def test_cors_allows_the_web_origin(client: TestClient) -> None:
+    preflight = client.options(
+        "/search",
+        headers={"Origin": WEB_URL, "Access-Control-Request-Method": "GET"},
+    )
+    assert preflight.status_code == 200, preflight.text
+    assert preflight.headers["access-control-allow-origin"] == WEB_URL
+
+    plain = client.get("/health", headers={"Origin": WEB_URL})
+    assert plain.headers["access-control-allow-origin"] == WEB_URL
+    blocked = client.get("/health", headers={"Origin": "https://evil.test"})
+    assert "access-control-allow-origin" not in blocked.headers
 
 
 def test_search_against_a_missing_index_fails_cleanly(tmp_path: Path) -> None:

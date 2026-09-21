@@ -11,6 +11,7 @@ shotgrep turns video into a searchable index of moments. Start with `SPEC.md` (w
 - Sync deps: `uv sync`
 - Test: `uv run pytest` (ingest contract tests need `ffprobe` on `PATH`, i.e. FFmpeg installed, plus libGL for OpenCV)
 - Lint: `uv run ruff check .`
+- Web app (in `web/`): `pnpm install`, `pnpm dev`, `pnpm lint`, `pnpm typecheck`, `pnpm test`
 
 ## Agent skills
 
