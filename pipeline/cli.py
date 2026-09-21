@@ -53,6 +53,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     serve_parser.add_argument("--host", default="127.0.0.1", help="interface to bind (default: 127.0.0.1)")
     serve_parser.add_argument("--port", type=int, default=8000, help="port to bind (default: 8000)")
+    mcp_parser = subparsers.add_parser("mcp", help="serve the index as MCP tools for coding agents")
+    mcp_parser.add_argument(
+        "--work-dir",
+        type=Path,
+        default=Path("work"),
+        help="directory holding the index (default: work)",
+    )
     return parser
 
 
@@ -71,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
         return _search(args.query, args.work_dir, args.k)
     if args.command == "serve":
         return _serve(args.work_dir, args.host, args.port)
+    if args.command == "mcp":
+        return _mcp(args.work_dir)
     return 2
 
 
@@ -101,4 +110,14 @@ def _serve(work_dir: Path, host: str, port: int) -> int:
     from api.app import create_app
 
     uvicorn.run(create_app(work_dir), host=host, port=port)
+    return 0
+
+
+def _mcp(work_dir: Path) -> int:
+    from api.mcp_server import create_mcp
+    from api.service import QueryService
+    from pipeline.stages.index import INDEX_DIR
+
+    # `serve` mounts the same server over HTTP; stdio is for a local agent.
+    create_mcp(QueryService(Path(work_dir) / INDEX_DIR)).run("stdio")
     return 0

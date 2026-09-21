@@ -4,16 +4,16 @@ Search video like it's text.
 
 Ask for a moment in plain language — *"the part where he parks the bike at night"* — and get the exact frame back, with jump-to-timestamp links.
 
-**Status:** early build. Ingest produces a searchable index; the CLI, REST API, and
-web player answer fused visual + transcript queries; the eval harness publishes
-[frozen-split results](eval/RESULTS.md).
+**Status:** early build. Ingest produces a searchable index; the CLI, REST API,
+MCP server, and web player answer fused visual + transcript queries; the eval
+harness publishes [frozen-split results](eval/RESULTS.md).
 
 ## Surface
 
 - **Ingest** local footage: proxy transcode, shot detection, transcript with word timestamps, visual embeddings
 - **Search**: fused transcript + visual retrieval, moment-level results (±1-3s), ANN over a LanceDB index
 - **Watch**: browser player that opens results at the right frame
-- **Agents** (planned): the index exposed as MCP tools so an agent can search, fetch moments, and read transcripts
+- **Agents**: the same index exposed as MCP tools (`search_moments`, `get_moment`, `get_transcript`, `list_assets`), so a coding agent can search, cite timestamps, and hand over deep links
 
 ## Docs
 
@@ -56,7 +56,8 @@ uv run pytest        # contract tests
 uv run ruff check .  # lint
 uv run shotgrep ingest <file> --work-dir work
 uv run shotgrep search "the part where he parks the bike at night" --work-dir work
-uv run shotgrep serve --work-dir work   # REST on http://localhost:8000
+uv run shotgrep serve --work-dir work   # REST and MCP at http://localhost:8000
+uv run shotgrep mcp --work-dir work     # MCP over stdio for a local agent
 uv run python -m eval --index work/index  # Recall@5/MRR/latency vs baseline
 ```
 
@@ -65,12 +66,24 @@ splits and compares fused search against a single-stage visual baseline on the
 same index. It is a quality gate, not a CI test; committed tables and the freeze
 rule live in [eval/RESULTS.md](eval/RESULTS.md).
 
-The REST endpoints are `GET /search`, `GET /moments/{id}`, `GET /assets/{id}`, and
-`GET /assets/{id}/transcript`; thumbnails and playback proxies are served from
-`/media`. Results carry deep links shaped
+The REST endpoints are `GET /search`, `GET /assets`, `GET /moments/{id}`,
+`GET /assets/{id}`, and `GET /assets/{id}/transcript`; thumbnails and playback
+proxies are served from `/media`. Results carry deep links shaped
 `{SHOTGREP_WEB_URL}/watch/{asset_id}?t={seconds}`, defaulting to
 `http://localhost:3000` (see
 [docs/adr](docs/adr/0002-read-contract-urls-and-deep-links.md)).
+
+`shotgrep mcp` serves the same query service as MCP tools over stdio, which is
+what a local coding agent connects to:
+
+```json
+{"mcpServers": {"shotgrep": {"command": "uv", "args": ["run", "shotgrep", "mcp", "--work-dir", "work"]}}}
+```
+
+`shotgrep serve` mounts the MCP endpoint at `/mcp` alongside REST, so one
+process serves both. A deployed host must be named in
+`SHOTGREP_MCP_ALLOWED_HOSTS` (comma-separated `host[:port]` allowlist) or the
+MCP transport answers `421`; the REST API is unaffected.
 
 The web player lives in `web/` (Next.js). Run the API on `http://localhost:8000`,
 then:

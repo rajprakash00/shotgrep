@@ -5,7 +5,8 @@ scores, applies a shot-start prior, and collapses near-duplicate moments.
 Moment lookup and transcript range reads come from the same index, so the
 deployed artifact is the built index alone. Thumbnails are returned as public
 URLs and every result carries a deep link into the web player. Handlers in
-api/app.py translate this interface to HTTP; MCP will translate it to tools.
+api/app.py translate this interface to HTTP; api/mcp_server.py translates the
+same interface to MCP tools.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ WEB_URL_ENV = "SHOTGREP_WEB_URL"
 DEFAULT_API_URL = "http://localhost:8000"
 DEFAULT_WEB_URL = "http://localhost:3000"
 DEFAULT_K = 10
+MAX_K = 100
 # A fixed candidate window per channel: the ranked list a query produces does
 # not change with k, so requesting more results appends rather than reshuffles.
 CANDIDATE_LIMIT = 200
@@ -110,16 +112,14 @@ class QueryService:
     def asset(self, asset_id: str) -> dict:
         """Asset metadata plus the public URL of its playback proxy."""
         self._prepare_tables()
-        row = self._asset(asset_id)
-        return {
-            "asset_id": row["id"],
-            "filename": row["filename"],
-            "duration_s": float(row["duration_s"]),
-            "fps": float(row["fps"]),
-            "codec": row["codec"],
-            "status": row["status"],
-            "proxy_url": self._media_url(f"{row['id']}/proxy.mp4"),
-        }
+        return self._asset_payload(self._asset(asset_id))
+
+    def list_assets(self) -> dict:
+        """Every indexed asset, ordered by filename so listings are stable."""
+        self._prepare_tables()
+        rows = self._table(ASSETS).search().to_list()
+        rows.sort(key=lambda row: (row["filename"], row["id"]))
+        return {"assets": [self._asset_payload(row) for row in rows]}
 
     def transcript(
         self,
@@ -199,6 +199,17 @@ class QueryService:
         if not rows:
             raise NotFoundError(f"no asset {asset_id!r} in the index")
         return rows[0]
+
+    def _asset_payload(self, row: dict) -> dict:
+        return {
+            "asset_id": row["id"],
+            "filename": row["filename"],
+            "duration_s": float(row["duration_s"]),
+            "fps": float(row["fps"]),
+            "codec": row["codec"],
+            "status": row["status"],
+            "proxy_url": self._media_url(f"{row['id']}/proxy.mp4"),
+        }
 
     def _result(self, hit: Hit, score: float | None) -> dict:
         return {
