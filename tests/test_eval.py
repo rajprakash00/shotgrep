@@ -20,9 +20,10 @@ from eval.metrics import (
     percentile,
     recall_at_k,
     reciprocal_rank,
+    score_by_film,
     score_by_split,
 )
-from eval.queries import SPLITS, QuerySetError, index_asset_ids, load_queries
+from eval.queries import SPLITS, QuerySetError, film_titles, index_asset_ids, load_queries
 from eval.report import Report, render_markdown, render_section
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -77,12 +78,12 @@ def test_percentile_interpolates_between_neighbours() -> None:
         percentile([], 95)
 
 
-def observation(split: str, relevant_at: int | None, latency_ms: float) -> Observation:
-    label = Label(asset="sintel", start_s=10.0, end_s=12.0)
+def observation(split: str, relevant_at: int | None, latency_ms: float, asset: str = "sintel") -> Observation:
+    label = Label(asset=asset, start_s=10.0, end_s=12.0)
     results = []
     for position in range(5):
         start = 11.0 if position == relevant_at else 500.0 + position
-        results.append(result("sintel", start, start))
+        results.append(result(asset, start, start))
     return Observation(split=split, label=label, results=results, latency_ms=latency_ms)
 
 
@@ -96,18 +97,72 @@ def test_score_by_split_reports_overall_and_per_split_metrics() -> None:
     )
     overall = metrics["overall"]
     assert overall.n == 3
-    assert overall.recall_at_5 == pytest.approx(2 / 3)
+    assert overall.recall_at_k == pytest.approx(2 / 3)
     assert overall.mrr == pytest.approx((1 + 1 / 3 + 0) / 3)
     assert overall.p50_ms == pytest.approx(200.0)
     assert overall.p95_ms == pytest.approx(290.0)
     easy = metrics["easy"]
     assert easy.n == 2
-    assert easy.recall_at_5 == 1.0
+    assert easy.recall_at_k == 1.0
     assert easy.mrr == pytest.approx(2 / 3)
     negation = metrics["negation"]
     assert negation.n == 1
-    assert negation.recall_at_5 == 0.0
+    assert negation.recall_at_k == 0.0
     assert negation.mrr == 0.0
+
+
+def test_score_by_split_scores_recall_at_the_requested_k() -> None:
+    metrics = score_by_split(
+        [
+            observation("easy", 0, 100.0),
+            observation("easy", 2, 200.0),
+            observation("easy", 4, 300.0),
+        ],
+        k=2,
+    )
+    assert metrics["overall"].recall_at_k == pytest.approx(1 / 3)
+    assert metrics["easy"].recall_at_k == pytest.approx(1 / 3)
+
+
+def test_score_by_split_scores_mrr_within_the_requested_k() -> None:
+    label = Label(asset="sintel", start_s=10.0, end_s=12.0)
+    results = [result("sintel", 500.0 + position, 500.0 + position) for position in range(5)]
+    results.append(result("sintel", 11.0, 11.0))
+    observation = Observation(split="easy", label=label, results=results, latency_ms=100.0)
+    assert score_by_split([observation], k=5)["overall"].mrr == 0.0
+    assert score_by_split([observation], k=6)["overall"].mrr == pytest.approx(1 / 6)
+
+
+def test_score_by_film_groups_metrics_by_label_asset() -> None:
+    metrics = score_by_film(
+        [
+            observation("easy", 0, 100.0, asset="sintel-hash"),
+            observation("easy", None, 200.0, asset="sintel-hash"),
+            observation("negation", 1, 300.0, asset="tos-hash"),
+        ]
+    )
+    assert set(metrics) == {"sintel-hash", "tos-hash"}
+    sintel = metrics["sintel-hash"]
+    assert sintel.n == 2
+    assert sintel.recall_at_k == 0.5
+    assert sintel.mrr == pytest.approx(0.5)
+    tears = metrics["tos-hash"]
+    assert tears.n == 1
+    assert tears.recall_at_k == 1.0
+    assert tears.mrr == pytest.approx(0.5)
+
+
+def test_score_by_film_names_assets_for_reporting() -> None:
+    metrics = score_by_film(
+        [observation("easy", 0, 100.0, asset="sintel-hash")],
+        names={"sintel-hash": "Sintel"},
+    )
+    assert set(metrics) == {"Sintel"}
+
+
+def test_score_by_film_of_an_empty_run_is_zero() -> None:
+    with pytest.raises(ValueError, match="no queries"):
+        score_by_film([])
 
 
 QUERY_SET = """
@@ -180,6 +235,22 @@ def test_index_asset_ids_maps_corpus_slugs_to_content_hashes(tmp_path) -> None:
     assert index_asset_ids(path) == {"sintel": "abc", "tears-of-steel": "def"}
 
 
+def test_film_titles_map_content_hashes_to_readable_film_names(tmp_path) -> None:
+    path = tmp_path / "manifest.json"
+    path.write_text(
+        json.dumps(
+            {
+                "assets": [
+                    {"id": "sintel", "sha256": "abc", "title": "Sintel"},
+                    {"id": "tears-of-steel", "sha256": "def", "title": "Tears of Steel"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert film_titles(path) == {"abc": "Sintel", "def": "Tears of Steel"}
+
+
 def test_observe_runs_every_query_once_in_frozen_order(tmp_path) -> None:
     from eval.harness import observe
 
@@ -187,25 +258,57 @@ def test_observe_runs_every_query_once_in_frozen_order(tmp_path) -> None:
         name = "fake"
 
         def __init__(self) -> None:
-            self.queries: list[str] = []
+            self.calls: list[tuple[str, int]] = []
 
         def search(self, query: str, *, k: int) -> list[dict]:
-            self.queries.append(query)
+            self.calls.append((query, k))
             return [result("tos-hash", 101.0, 101.0)]
 
     system = FakeSystem()
     query_set = load_queries(write_query_set(tmp_path, QUERY_SET))
     observations = observe(system, query_set, asset_ids={"tears-of-steel": "tos-hash", "sintel": "sintel-hash"})
-    assert system.queries == ["warm up", "a robot hand on a table", "a forest with no animals"]
+    assert system.calls == [
+        ("warm up", 1),
+        ("a robot hand on a table", 10),
+        ("a forest with no animals", 10),
+    ]
     assert [observation.split for observation in observations] == ["easy", "negation"]
     assert all(observation.latency_ms >= 0.0 for observation in observations)
-    assert score_by_split(observations)["overall"].recall_at_5 == 0.5
+    assert score_by_split(observations)["overall"].recall_at_k == 0.5
 
 
-def report() -> Report:
+def test_observe_measures_at_the_requested_k(tmp_path) -> None:
+    from eval.harness import observe
+
+    class FakeSystem:
+        name = "fake"
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, int]] = []
+
+        def search(self, query: str, *, k: int) -> list[dict]:
+            self.calls.append((query, k))
+            return [result("tos-hash", 101.0, 101.0)]
+
+    system = FakeSystem()
+    query_set = load_queries(write_query_set(tmp_path, QUERY_SET))
+    observe(system, query_set, asset_ids={"tears-of-steel": "tos-hash", "sintel": "sintel-hash"}, k=3)
+    assert [k for _, k in system.calls] == [1, 3, 3]
+
+
+def test_build_parser_defaults_to_the_service_k_and_accepts_an_override() -> None:
+    from api.service import DEFAULT_K
+    from eval.harness import build_parser
+
+    parser = build_parser()
+    assert parser.parse_args([]).k == DEFAULT_K
+    assert parser.parse_args(["--k", "3"]).k == 3
+
+
+def report(*, recall_k: int = 5, run_k: int = 10) -> Report:
     return Report(
         date="2026-09-20",
-        command="uv run python -m eval --index work/index",
+        command="uv run python -m eval --index work/index --k 10",
         query_set_hash="a" * 64,
         corpus_hash="b" * 64,
         index={
@@ -214,26 +317,34 @@ def report() -> Report:
             "revision": "4649052",
             "assets": 4,
             "moments": 3000,
-            "index_version": 2,
+            "index_version": 3,
         },
         tables={
             "shipped fused": {
-                "overall": Metrics(n=60, recall_at_5=0.72, mrr=0.5432, p50_ms=120.4, p95_ms=210.9),
-                "easy": Metrics(n=15, recall_at_5=0.9333, mrr=0.8, p50_ms=110.0, p95_ms=180.0),
+                "overall": Metrics(n=60, recall_at_k=0.72, mrr=0.5432, p50_ms=120.4, p95_ms=210.9),
+                "easy": Metrics(n=15, recall_at_k=0.9333, mrr=0.8, p50_ms=110.0, p95_ms=180.0),
             },
             "baseline visual": {
-                "overall": Metrics(n=60, recall_at_5=0.5, mrr=0.3333, p50_ms=90.0, p95_ms=150.0),
+                "overall": Metrics(n=60, recall_at_k=0.5, mrr=0.3333, p50_ms=90.0, p95_ms=150.0),
             },
         },
+        films={
+            "shipped fused": {
+                "Sintel": Metrics(n=16, recall_at_k=0.6875, mrr=0.5, p50_ms=115.0, p95_ms=190.0),
+                "Tears of Steel": Metrics(n=16, recall_at_k=0.375, mrr=0.3, p50_ms=130.0, p95_ms=220.0),
+            },
+            "baseline visual": {
+                "Sintel": Metrics(n=16, recall_at_k=0.5, mrr=0.4, p50_ms=80.0, p95_ms=140.0),
+            },
+        },
+        run_k=run_k,
+        recall_k=recall_k,
     )
 
 
 def test_render_markdown_commits_the_run_as_a_dated_table() -> None:
     text = render_markdown(report())
     assert "Freeze note" in text
-    assert "a" * 64 in text
-    assert "b" * 64 in text
-    assert "Xenova/siglip-base-patch16-224" in text
     assert "[eval/ANALYSIS.md](ANALYSIS.md)" in text
     assert "## 2026-09-20" in text
     assert "| System | Split | N | Recall@5 | MRR | p50 (ms) | p95 (ms) |" in text
@@ -242,12 +353,31 @@ def test_render_markdown_commits_the_run_as_a_dated_table() -> None:
     assert "| baseline visual | overall | 60 | 0.500 | 0.333 | 90 | 150 |" in text
 
 
-def test_render_section_is_the_dated_block_a_later_run_appends() -> None:
+def test_render_section_carries_the_inputs_and_index_of_its_own_run() -> None:
     text = render_section(report())
     assert text.startswith("## 2026-09-20")
-    assert "| shipped fused | overall | 60 | 0.720 | 0.543 | 120 | 211 |" in text
+    assert "a" * 64 in text
+    assert "b" * 64 in text
+    assert "index version 3" in text
+    assert "Latency measured at k=10; Recall@5 scored from the top 5 of the same run." in text
+    assert "Reproduce with `uv run python -m eval --index work/index --k 10`." in text
     assert "Freeze note" not in text
-    assert "Reproduce with" not in text
+
+
+def test_render_section_reports_per_film_rows() -> None:
+    text = render_section(report())
+    assert "**By film**" in text
+    assert "| System | Film | N | Recall@5 | MRR | p50 (ms) | p95 (ms) |" in text
+    assert "| shipped fused | Sintel | 16 | 0.688 | 0.500 | 115 | 190 |" in text
+    assert "| shipped fused | Tears of Steel | 16 | 0.375 | 0.300 | 130 | 220 |" in text
+    assert "| baseline visual | Sintel | 16 | 0.500 | 0.400 | 80 | 140 |" in text
+
+
+def test_render_section_generalises_the_recall_header_to_the_scored_k() -> None:
+    text = render_section(report(recall_k=3, run_k=3))
+    assert "| System | Split | N | Recall@3 | MRR | p50 (ms) | p95 (ms) |" in text
+    assert "Latency measured at k=3; Recall@3 scored from the top 3 of the same run." in text
+    assert "Recall@5" not in text
 
 
 def test_check_coverage_rejects_an_index_missing_a_corpus_asset(tmp_path) -> None:

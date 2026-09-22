@@ -108,7 +108,7 @@ is a weak point. The same object in another film also causes errors.
 ## Limits of this test
 
 - The queries do not name the film. The system searches all four films at the same time. A result from another film can match the words but not the label.
-- The harness measures latency at k=5. The service default is k=10.
+- The first run measures latency at k=5. The 2026-09-22 rerun measures latency at the service default k=10.
 - The test covers retrieval only. It does not cover REST, MCP, the web player, or the ingest of new files.
 - The labels are frozen. A ranking change must not edit them. A new run appends a dated table to [RESULTS.md](RESULTS.md).
 
@@ -117,9 +117,9 @@ is a weak point. The same object in another film also causes errors.
 1. Repair the transcript channel. A query with different words finds nothing today. Use semantic retrieval over transcript segments, or a looser match. This is the largest expected gain. It must help Tears of Steel first.
 2. Make negation explicit. After retrieval, inspect the top results for the absent object. Remove the results that contain it.
 3. Add time priors. A query with the word "opening" can prefer early moments. A query with the word "final" can prefer late moments.
-4. Report per-film numbers. The table groups results by split only. Per-film rows show the weak film.
-5. Measure latency at k=10. The default API call must appear in the table.
-6. Continue the product work. The web player, the MCP server, and the hosted demo are not built. The eval covers search quality only.
+4. Report per-film numbers. The table groups results by split only. Per-film rows show the weak film. Done in the 2026-09-22 rerun.
+5. Measure latency at k=10. The default API call must appear in the table. Done in the 2026-09-22 rerun.
+6. Continue the product work. The web player and the MCP server are built and tested. The hosted demo is not built (#11). The eval covers search quality only.
 
 ## Conclusion
 
