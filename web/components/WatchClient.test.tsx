@@ -32,7 +32,7 @@ describe("WatchClient", () => {
     expect(video).not.toBeNull();
     expect(video).toHaveAttribute("src", "http://localhost:8000/media/asset/proxy.mp4");
     expect(video).toHaveAttribute("preload", "metadata");
-    expect((video as HTMLVideoElement).currentTime).toBe(4.44);
+    await waitFor(() => expect((video as HTMLVideoElement).currentTime).toBe(4.44));
   });
 
   it("seeks again once metadata arrives", async () => {

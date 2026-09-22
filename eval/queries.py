@@ -80,11 +80,20 @@ def index_asset_ids(corpus_manifest: Path) -> dict[str, str]:
     Labels name assets by their corpus slug for readability; the index keys
     assets by content hash, so the harness resolves one to the other here.
     """
+    return _asset_field(corpus_manifest, "id", "sha256")
+
+
+def film_titles(corpus_manifest: Path) -> dict[str, str]:
+    """Map index asset ids (content hashes) to readable film titles for rows."""
+    return _asset_field(corpus_manifest, "sha256", "title")
+
+
+def _asset_field(path: Path, key: str, value: str) -> dict[str, str]:
     try:
-        manifest = json.loads(Path(corpus_manifest).read_text(encoding="utf-8"))
-        return {asset["id"]: asset["sha256"] for asset in manifest["assets"]}
+        manifest = json.loads(Path(path).read_text(encoding="utf-8"))
+        return {asset[key]: asset[value] for asset in manifest["assets"]}
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        raise QuerySetError(f"could not read corpus manifest {corpus_manifest}: {exc}") from exc
+        raise QuerySetError(f"could not read corpus manifest {path}: {exc}") from exc
 
 
 def _query(path: Path, index: int, entry: object) -> Query:

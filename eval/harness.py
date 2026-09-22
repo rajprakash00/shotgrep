@@ -12,7 +12,9 @@ numbers describe what users get. The baseline is single-stage visual retrieval:
 the same index, the same query embeddings, but ANN over visual moments only,
 with no transcript channel, no score normalization, no shot-start prior, and
 no near-duplicate collapse. Both run on the same corpus and sampling, so the
-difference is attributable to retrieval and fusion. Latency is measured after
+difference is attributable to retrieval and fusion. Each query runs once at
+`--k` (the service default, 10) and Recall@5 is scored from the top five of the
+same run, so latency and recall describe one call. Latency is measured after
 a warm-up so model load does not pollute p50/p95. This is a quality gate, not
 a CI test (SPEC.md); the output is committed to eval/RESULTS.md.
 """
@@ -30,9 +32,9 @@ from typing import Protocol
 import lancedb
 
 from api.retrieval import VISUAL_KIND_CLAUSE, Hit, visual_hits
-from api.service import QueryService
-from eval.metrics import RECALL_K, Label, Observation, score_by_split
-from eval.queries import QuerySet, QuerySetError, index_asset_ids, load_queries
+from api.service import DEFAULT_K, QueryService
+from eval.metrics import RECALL_K, Label, Observation, score_by_film, score_by_split
+from eval.queries import QuerySet, QuerySetError, film_titles, index_asset_ids, load_queries
 from eval.report import Report, render_markdown, render_section
 from pipeline.errors import IngestError
 from pipeline.models.embedder import SiglipOnnxEmbedder
@@ -91,7 +93,7 @@ def observe(
     query_set: QuerySet,
     asset_ids: dict[str, str],
     *,
-    k: int = RECALL_K,
+    k: int = DEFAULT_K,
 ) -> list[Observation]:
     system.search(WARMUP_QUERY, k=1)
     observations = []
@@ -106,9 +108,17 @@ def observe(
     return observations
 
 
-def measure(index_dir: Path, query_set: QuerySet, asset_ids: dict[str, str]) -> dict[str, list[Observation]]:
+def measure(
+    index_dir: Path,
+    query_set: QuerySet,
+    asset_ids: dict[str, str],
+    *,
+    k: int = DEFAULT_K,
+) -> dict[str, list[Observation]]:
     check_coverage(index_dir, asset_ids)
-    return {system.name: observe(system, query_set, asset_ids) for system in build_systems(index_dir)}
+    return {
+        system.name: observe(system, query_set, asset_ids, k=k) for system in build_systems(index_dir)
+    }
 
 
 def indexed_asset_ids(index_dir: Path) -> set[str]:
@@ -164,7 +174,10 @@ def build_report(
     corpus_path: Path,
     run_date: str,
     command: str,
+    run_k: int = DEFAULT_K,
 ) -> Report:
+    recall_k = min(run_k, RECALL_K)
+    names = film_titles(corpus_path)
     return Report(
         date=run_date,
         command=command,
@@ -172,20 +185,35 @@ def build_report(
         corpus_hash=file_hash(corpus_path),
         index=index_metadata(index_dir),
         tables={
-            system: score_by_split(rows, k=RECALL_K, tolerance_s=query_set.tolerance_s)
+            system: score_by_split(rows, k=recall_k, tolerance_s=query_set.tolerance_s)
             for system, rows in observations.items()
         },
+        films={
+            system: score_by_film(rows, names=names, k=recall_k, tolerance_s=query_set.tolerance_s)
+            for system, rows in observations.items()
+        },
+        run_k=run_k,
+        recall_k=recall_k,
     )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m eval",
-        description="Measure Recall@5, MRR, and latency over the frozen query set on a built index.",
+        description="Measure recall, MRR, and latency over the frozen query set on a built index.",
     )
     parser.add_argument("--index", type=Path, default=DEFAULT_INDEX, help="built index directory")
     parser.add_argument("--queries", type=Path, default=DEFAULT_QUERIES, help="frozen query set")
     parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS, help="corpus manifest")
+    parser.add_argument(
+        "--k",
+        type=int,
+        default=DEFAULT_K,
+        help=(
+            f"retrieval depth each query runs at, and the k latency is measured at "
+            f"(default: {DEFAULT_K}, the service default)"
+        ),
+    )
     parser.add_argument("--date", default=None, help="run date for the table (default: today)")
     parser.add_argument("--out", type=Path, default=None, help="also write the markdown table here")
     parser.add_argument(
@@ -201,9 +229,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.append and args.out is None:
         parser.error("--append needs --out")
+    if args.k <= 0:
+        parser.error("--k must be positive")
     try:
         query_set = load_queries(args.queries)
-        observations = measure(args.index, query_set, index_asset_ids(args.corpus))
+        observations = measure(args.index, query_set, index_asset_ids(args.corpus), k=args.k)
         report = build_report(
             index_dir=args.index,
             query_set=query_set,
@@ -217,8 +247,10 @@ def main(argv: list[str] | None = None) -> int:
                     f"--index {_display(args.index)}",
                     f"--queries {_display(args.queries)}",
                     f"--corpus {_display(args.corpus)}",
+                    f"--k {args.k}",
                 ]
             ),
+            run_k=args.k,
         )
     except (QuerySetError, IngestError) as exc:
         print(f"error: {exc}", file=sys.stderr)
