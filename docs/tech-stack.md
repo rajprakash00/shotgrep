@@ -19,7 +19,7 @@ Decisions are deliberate. Alternatives are listed so future changes are cheap.
 
 ## ML (inference only — no training in v1)
 
-- **Embeddings:** SigLIP-base, exported to ONNX, int8 quantized, CPU runtime. One precision path for frame embeddings and query embeddings so index and query vectors live in the same space.
+- **Embeddings:** two spaces (ADR-0003). SigLIP-base for frames and visual queries, exported to ONNX, int8 quantized, CPU runtime; bge-small-en-v1.5 for transcript segments and transcript queries, same export path. Within each space, index and query vectors use one model and one precision.
 - **ASR:** faster-whisper, large-v3, int8. CUDA when available; CPU fallback.
 - **Rerank (optional):** cross-encoder or multimodal LLM over top-k. Off by default until the eval justifies it.
 - **GPU policy:** optional accelerator. ASR and proxy encode are the wins. CPU-only runs must stay correct and publishable.

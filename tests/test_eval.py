@@ -373,6 +373,20 @@ def test_render_section_reports_per_film_rows() -> None:
     assert "| baseline visual | Sintel | 16 | 0.500 | 0.400 | 80 | 140 |" in text
 
 
+def test_render_section_names_the_text_space_when_the_index_has_one() -> None:
+    from dataclasses import replace
+
+    index = dict(
+        report().index,
+        text_model="Xenova/bge-small-en-v1.5",
+        text_precision="int8",
+        text_revision="ea104da",
+    )
+    text = render_section(replace(report(), index=index))
+    assert "Xenova/siglip-base-patch16-224 int8 rev 4649052 (visual)" in text
+    assert "Xenova/bge-small-en-v1.5 int8 rev ea104da (transcript)" in text
+
+
 def test_render_section_generalises_the_recall_header_to_the_scored_k() -> None:
     text = render_section(report(recall_k=3, run_k=3))
     assert "| System | Split | N | Recall@3 | MRR | p50 (ms) | p95 (ms) |" in text

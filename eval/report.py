@@ -101,7 +101,10 @@ def _row(system: str, group: str, metrics: Metrics) -> str:
 
 
 def _index_text(index: dict) -> str:
-    return (
-        f"{index['model']} {index['precision']} rev {index['revision']}; "
-        f"{index['assets']} assets, {index['moments']} moments, index version {index['index_version']}"
-    )
+    spaces = [f"{index['model']} {index['precision']} rev {index['revision']} (visual)"]
+    if index.get("text_model"):
+        spaces.append(
+            f"{index['text_model']} {index['text_precision']} rev {index['text_revision']} (transcript)"
+        )
+    size = f"{index['assets']} assets, {index['moments']} moments, index version {index['index_version']}"
+    return "; ".join([", ".join(spaces), size])

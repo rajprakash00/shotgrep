@@ -31,8 +31,8 @@ Stage order: `probe → proxy → shots → asr → frames → embed → index`.
 
 ## Online plane
 
-- Query text is embedded by the same model and precision as the index.
-- Candidate retrieval: ANN over visual moments, plus keyword/fuzzy retrieval over transcript moments in the same query service, then fused.
+- Query text is embedded in the same space as the index channel it queries: SigLIP for visual moments, the text embedder for transcript moments (ADR-0003).
+- Candidate retrieval: ANN over visual moments, ANN over transcript segment vectors, plus keyword/fuzzy retrieval over transcript moments, all in the same query service, then fused.
 - Fusion: score normalization + reciprocal rank fusion + priors (shot starts rank above mid-shot samples), then a greedy MMR-style collapse so results are not five adjacent frames.
 - Results carry: moment id, asset, time range, thumbnail, snippet, score, deep link.
 - Rerank is a pluggable step, off until the eval justifies it.
@@ -40,9 +40,8 @@ Stage order: `probe → proxy → shots → asr → frames → embed → index`.
 ## Data model
 
 - `assets`: id (content hash), path, duration, fps, codec, status.
-- `moments`: id, asset_id, t_start, t_end, kind, thumbnail path, embedding, snippet, shot_id.
-- `transcripts`: per-asset word list, one row per segment. Not embedded wholesale —
-  anchor moments point into it, and range reads come from this table.
+- `moments`: id, asset_id, t_start, t_end, kind, thumbnail path, embedding, snippet, shot_id. Transcript moments also carry the text embedder's vector and its model metadata; other kinds leave it null.
+- `transcripts`: per-asset word list, one row per segment; the source of range reads. Moment text vectors are stored on the transcript moments that anchor these segments.
 - The built index also carries the moment thumbnails, so it serves on its own
   (ADR-0001).
 
