@@ -21,7 +21,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/huggingface/hub
-          key: hf-hub-whisper-tiny-siglip-int8-v1
+          key: hf-hub-whisper-tiny-siglip-bge-int8-v2
 
       - name: Lint
         run: uv run ruff check .

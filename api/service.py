@@ -1,12 +1,14 @@
 """The query service: one interface behind REST and MCP.
 
-Search fuses visual ANN with transcript keyword/fuzzy retrieval, normalizes
-scores, applies a shot-start prior, and collapses near-duplicate moments.
-Moment lookup and transcript range reads come from the same index, so the
-deployed artifact is the built index alone. Thumbnails are returned as public
-URLs and every result carries a deep link into the web player. Handlers in
-api/app.py translate this interface to HTTP; api/mcp_server.py translates the
-same interface to MCP tools.
+Search fuses visual ANN with dense and lexical transcript retrieval, normalizes
+scores, applies a shot-start prior, and collapses near-duplicate moments. The
+visual and text embedding spaces are validated channel by channel, so a query
+embedder that does not match what the index stored is refused. Moment lookup
+and transcript range reads come from the same index, so the deployed artifact
+is the built index alone. Thumbnails are returned as public URLs and every
+result carries a deep link into the web player. Handlers in api/app.py
+translate this interface to HTTP; api/mcp_server.py translates the same
+interface to MCP tools.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from api.retrieval import (
     VISUAL_KIND_CLAUSE,
     Hit,
     as_hit,
+    dense_transcript_hits,
     filter_clause,
     quote,
     transcript_hits,
@@ -34,6 +37,7 @@ from pipeline.stages.index import ASSETS, INDEX_VERSION, MOMENTS, TRANSCRIPTS
 
 if TYPE_CHECKING:
     from pipeline.models.embedder import SiglipOnnxEmbedder
+    from pipeline.models.text_embedder import TextOnnxEmbedder
 
 API_URL_ENV = "SHOTGREP_API_URL"
 WEB_URL_ENV = "SHOTGREP_WEB_URL"
@@ -58,6 +62,7 @@ class QueryService:
         index_dir: Path,
         *,
         embedder: SiglipOnnxEmbedder | None = None,
+        text_embedder: TextOnnxEmbedder | None = None,
         api_url: str | None = None,
         web_url: str | None = None,
     ) -> None:
@@ -65,6 +70,7 @@ class QueryService:
         self.api_url = (api_url or os.environ.get(API_URL_ENV) or DEFAULT_API_URL).rstrip("/")
         self.web_url = (web_url or os.environ.get(WEB_URL_ENV) or DEFAULT_WEB_URL).rstrip("/")
         self._embedder = embedder
+        self._text_embedder = text_embedder
         self._db = None
         self._ready = False
 
@@ -81,12 +87,19 @@ class QueryService:
             raise ValueError("k must be positive")
         self._prepare_tables()
         embedder = self._get_embedder()
-        self._check_embedding_space(embedder)
+        text_embedder = self._get_text_embedder()
+        self._check_embedding_space(embedder, text_embedder)
         filters = filter_clause(asset, start_s, end_s)
         visual = visual_hits(
             self._table(MOMENTS),
             self._vector(query),
             where_clause(VISUAL_KIND_CLAUSE, filters),
+            CANDIDATE_LIMIT,
+        )
+        dense = dense_transcript_hits(
+            self._table(MOMENTS),
+            self._text_vector(query),
+            where_clause(TRANSCRIPT_KIND_CLAUSE, filters),
             CANDIDATE_LIMIT,
         )
         transcript = transcript_hits(
@@ -95,7 +108,7 @@ class QueryService:
             where_clause(TRANSCRIPT_KIND_CLAUSE, filters),
             CANDIDATE_LIMIT,
         )
-        results = fuse([visual, transcript], k)
+        results = fuse([visual, dense, transcript], k)
         return {
             "query": query,
             "model": self._model(),
@@ -161,7 +174,9 @@ class QueryService:
             )
         self._ready = True
 
-    def _check_embedding_space(self, embedder: SiglipOnnxEmbedder) -> None:
+    def _check_embedding_space(
+        self, embedder: SiglipOnnxEmbedder, text_embedder: TextOnnxEmbedder
+    ) -> None:
         mismatched = self._table(MOMENTS).count_rows(
             f"embedding_model != {quote(embedder.model)} "
             f"OR embedding_precision != {quote(embedder.precision)} "
@@ -171,6 +186,19 @@ class QueryService:
             raise IngestError(
                 f"the index holds {mismatched} moments embedded by another model or precision; "
                 "re-ingest or match SHOTGREP_EMBED_MODEL and SHOTGREP_EMBED_PRECISION"
+            )
+        mismatched_transcript = self._table(MOMENTS).count_rows(
+            f"{TRANSCRIPT_KIND_CLAUSE} AND ("
+            f"text_embedding_model != {quote(text_embedder.model)} "
+            f"OR text_embedding_precision != {quote(text_embedder.precision)} "
+            f"OR text_embedding_revision != {quote(text_embedder.revision)} "
+            f"OR text_embedding_model IS NULL)"
+        )
+        if mismatched_transcript:
+            raise IngestError(
+                f"the index holds {mismatched_transcript} transcript moments embedded by another "
+                "text model or precision; re-ingest or match SHOTGREP_TEXT_EMBED_MODEL and "
+                "SHOTGREP_TEXT_EMBED_PRECISION"
             )
 
     def _table(self, name: str):
@@ -183,8 +211,18 @@ class QueryService:
             self._embedder = SiglipOnnxEmbedder()
         return self._embedder
 
+    def _get_text_embedder(self) -> TextOnnxEmbedder:
+        if self._text_embedder is None:
+            from pipeline.models.text_embedder import TextOnnxEmbedder
+
+            self._text_embedder = TextOnnxEmbedder()
+        return self._text_embedder
+
     def _vector(self, query: str) -> list[float]:
         return self._get_embedder().embed_text(query).tolist()
+
+    def _text_vector(self, query: str) -> list[float]:
+        return self._get_text_embedder().embed_query(query).tolist()
 
     def _model(self) -> dict:
         embedder = self._get_embedder()

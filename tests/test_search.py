@@ -114,6 +114,15 @@ def test_results_carry_the_read_contract(ingested: Path) -> None:
         )
 
 
+def test_search_matches_a_spoken_line_by_meaning(ingested: Path) -> None:
+    # The words share nothing with the transcript, so the lexical gate stays
+    # shut; only the dense transcript channel can surface the robotics line.
+    payload = search_payload(ingested, "science and technology excite him and he dreams of the stars", "-k", "5")
+    transcripts = [result for result in payload["results"] if result["kind"] == "transcript"]
+    assert transcripts, f"expected a dense transcript hit, got {payload['results']}"
+    assert any("robotics" in (result["snippet"] or "") for result in transcripts), transcripts
+
+
 def test_search_refuses_an_index_from_another_model(ingested: Path, tmp_path: Path) -> None:
     work = tmp_path / "work"
     shutil.copytree(ingested, work)
@@ -123,11 +132,39 @@ def test_search_refuses_an_index_from_another_model(ingested: Path, tmp_path: Pa
     rows = arrow.to_pylist()
     for row in rows:
         row["embedding_model"] = "other/model"
-    db.create_table("moments", data=pa.Table.from_pylist(rows, schema=arrow.schema), mode="overwrite")
+    db.create_table(
+        "moments",
+        data=pa.Table.from_pylist(rows, schema=arrow.schema),
+        mode="overwrite",
+        on_bad_vectors="null",
+    )
 
     result = run_cli("search", "anything", "--work-dir", str(work))
     assert result.returncode != 0
     assert "another model" in result.stderr
+    assert result.stdout == ""
+
+
+def test_search_refuses_an_index_from_another_text_model(ingested: Path, tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    shutil.copytree(ingested, work)
+    db = lancedb.connect(str(work / "index"))
+    table = db.open_table("moments")
+    arrow = table.to_arrow()
+    rows = arrow.to_pylist()
+    for row in rows:
+        if row["kind"] == "transcript":
+            row["text_embedding_model"] = "other/text-model"
+    db.create_table(
+        "moments",
+        data=pa.Table.from_pylist(rows, schema=arrow.schema),
+        mode="overwrite",
+        on_bad_vectors="null",
+    )
+
+    result = run_cli("search", "anything", "--work-dir", str(work))
+    assert result.returncode != 0
+    assert "another text model" in result.stderr
     assert result.stdout == ""
 
 

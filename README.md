@@ -102,12 +102,15 @@ ASR defaults to `large-v3` int8 on CUDA when a device is available, CPU
 otherwise. Override with `SHOTGREP_ASR_MODEL` and `SHOTGREP_ASR_DEVICE`
 (`auto`, `cuda`, `cpu`); the contract tests pin a tiny model on CPU.
 
-Frame and query embeddings come from pinned SigLIP-base ONNX int8 assets
-(`Xenova/siglip-base-patch16-224`), fetched once into the Hugging Face cache.
-`SHOTGREP_EMBED_MODEL` and `SHOTGREP_EMBED_PRECISION` (default `int8`) override
-the source; ingest and query must use the same pair. Ingest writes per-asset
-artifacts plus a LanceDB index under `work/index`, so `search` needs only
-`--work-dir`.
+Frame and visual query embeddings come from pinned SigLIP-base ONNX int8 assets
+(`Xenova/siglip-base-patch16-224`); transcript segments and transcript queries
+use pinned bge-small-en-v1.5 ONNX int8 (`Xenova/bge-small-en-v1.5`) in a second
+space (see [ADR-0003](docs/adr/0003-two-embedding-spaces.md)). Both are fetched
+once into the Hugging Face cache. `SHOTGREP_EMBED_MODEL`,
+`SHOTGREP_EMBED_PRECISION`, `SHOTGREP_TEXT_EMBED_MODEL`, and
+`SHOTGREP_TEXT_EMBED_PRECISION` (defaults `int8`) override the sources; ingest
+and query must use the same models per space. Ingest writes per-asset artifacts
+plus a LanceDB index under `work/index`, so `search` needs only `--work-dir`.
 
 On an NVIDIA machine, install cuBLAS from the NVIDIA wheels:
 

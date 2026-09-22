@@ -152,6 +152,15 @@ def test_search_result_sources_are_fused(client: TestClient) -> None:
     assert kinds & {"frame", "shot_start"}, f"visual retrieval missing from {kinds}"
 
 
+def test_search_dense_transcript_hits_join_the_fused_results(client: TestClient) -> None:
+    # This paraphrase shares no content words with the transcript, so the
+    # lexical gate drops it; the dense transcript channel must surface it.
+    results = search(client, "science and technology excite him and he dreams of the stars", k=5)["results"]
+    transcripts = [result for result in results if result["kind"] == "transcript"]
+    assert transcripts, f"dense transcript retrieval missing from {results}"
+    assert any("robotics" in (result["snippet"] or "") for result in transcripts), transcripts
+
+
 def test_search_collapses_near_duplicate_moments(client: TestClient) -> None:
     results = search(client, "two people standing on a bridge", k=6)["results"]
     kept: list[dict] = []
@@ -185,7 +194,9 @@ def test_search_filters_by_time_range(client: TestClient) -> None:
     assert results
     for result in results:
         assert result["end_s"] >= 2.0 and result["start_s"] <= 4.0, result
-    assert all(result["kind"] != "transcript" for result in results), "4.44s transcript is outside the range"
+    assert all(
+        not (result["kind"] == "transcript" and result["start_s"] == 4.44) for result in results
+    ), "the 4.44s transcript is outside the range"
 
 
 def test_search_ranking_is_independent_of_k(client: TestClient) -> None:

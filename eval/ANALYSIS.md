@@ -112,9 +112,48 @@ is a weak point. The same object in another film also causes errors.
 - The test covers retrieval only. It does not cover REST, MCP, the web player, or the ingest of new files.
 - The labels are frozen. A ranking change must not edit them. A new run appends a dated table to [RESULTS.md](RESULTS.md).
 
+## Update 2026-09-22: the dense transcript channel (action 1)
+
+The transcript channel now retrieves by meaning as well as by words: transcript
+segments are embedded with `bge-small-en-v1.5` (index version 4), a dense
+channel joins the visual and lexical ones in the query service, and hits below
+bge's similarity floor (0.6) are treated as noise. The frozen set was rerun at
+k=10 and the dated table appended to [RESULTS.md](RESULTS.md).
+
+| Metric | k=10 baseline | dense transcript | Change |
+|---|---|---|---|
+| Overall Recall@5 | 0.609 | 0.688 | +0.079 |
+| Overall MRR | 0.459 | 0.495 | +0.036 |
+| Sintel Recall@5 | 0.688 | 0.875 | +0.187 |
+| Tears of Steel Recall@5 | 0.375 | 0.500 | +0.125 |
+| Elephants Dream Recall@5 | 0.562 | 0.562 | 0.000 |
+| Big Buck Bunny Recall@5 | 0.812 | 0.812 | 0.000 |
+| p50 latency | 125 ms | 189 ms | +64 ms |
+
+The queries about spoken lines that fail in the first analysis now find their
+moment: `easy-05` (a woman searching for someone), `easy-06` (an old man
+asking about a dragon), and `easy-10` (a man asking a woman whether a machine
+freaks her out) enter the top 5 through the dense channel. Sintel and Tears of
+Steel improve; the two films whose queries are visual descriptions hold their
+baseline. Elephants Dream does not improve: its paraphrases score below the
+similarity floor, and the ungated variant of the same channel (committed as a
+rejected run in [RESULTS.md](RESULTS.md)) scored it 0.375 by letting noise
+displace visual results.
+
+What still fails:
+
+- **Hallucinated transcript on Big Buck Bunny.** The ASR model invents 20
+  "I don't know." segments over the music. They are below the floor, but they
+  show that segment text is only as good as the ASR.
+- **Elephants Dream paraphrases.** Its dialogue is quiet and indirect, and
+  bge-small scores it below the floor. A larger embedder or a reranker is the
+  next lever, not a lower gate.
+- **Position in time and negation.** Actions 2 and 3 remain open; the splits
+  moved with the dense channel but the failures in the first analysis stand.
+
 ## Actions
 
-1. Repair the transcript channel. A query with different words finds nothing today. Use semantic retrieval over transcript segments, or a looser match. This is the largest expected gain. It must help Tears of Steel first.
+1. Repair the transcript channel. A query with different words finds nothing today. Use semantic retrieval over transcript segments, or a looser match. This is the largest expected gain. It must help Tears of Steel first. **Done in the 2026-09-22 dense transcript rerun; Tears of Steel and Sintel improved, Elephants Dream held.**
 2. Make negation explicit. After retrieval, inspect the top results for the absent object. Remove the results that contain it.
 3. Add time priors. A query with the word "opening" can prefer early moments. A query with the word "final" can prefer late moments.
 4. Report per-film numbers. The table groups results by split only. Per-film rows show the weak film. Done in the 2026-09-22 rerun.

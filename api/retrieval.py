@@ -1,12 +1,17 @@
-"""Candidate retrieval: visual ANN and transcript keyword/fuzzy matching.
+"""Candidate retrieval: visual ANN and two transcript channels.
 
 Visual moments are retrieved by cosine ANN over the query embedding, the same
 model and precision that produced the index. Transcript moments are retrieved
-lexically: tokens match exactly or fuzzily (difflib ratio), weighted by inverse
-document frequency and normalized for segment length. A segment must cover at
-least MIN_COVERAGE of the query's IDF weight, so sharing only stopwords with a
-query does not put an irrelevant quote into the fused list. Both channels push
-the same asset and time-range filters into LanceDB.
+two ways: densely, by cosine ANN over the text embedder's segment vectors, so a
+query with different words can still find the line by meaning; and lexically,
+where tokens match exactly or fuzzily (difflib ratio), weighted by inverse
+document frequency and normalized for segment length. Each transcript channel
+carries a precision gate: the lexical one requires covering MIN_COVERAGE of the
+query's IDF weight, so sharing only stopwords with a query does not put an
+irrelevant quote into the fused list, and the dense one requires a bge
+similarity of at least MIN_SIMILARITY, because every segment is "similar" to
+every query below the model's own similarity interval. All channels push the
+same asset and time-range filters into LanceDB.
 """
 
 from __future__ import annotations
@@ -22,8 +27,14 @@ SHOT_START = "shot_start"
 TRANSCRIPT = "transcript"
 VISUAL_KIND_CLAUSE = f"kind IN ({FRAME!r}, {SHOT_START!r})"
 TRANSCRIPT_KIND_CLAUSE = f"kind = {TRANSCRIPT!r}"
+EMBEDDING_COLUMN = "embedding"
+TEXT_EMBEDDING_COLUMN = "text_embedding"
 FUZZY_THRESHOLD = 0.8
 MIN_COVERAGE = 0.5
+# bge similarities live in about [0.6, 1]; below the interval's floor every
+# segment looks alike and the channel floods fusion with noise. The eval
+# measured the floor (eval/RESULTS.md, the rejected ungated run).
+MIN_SIMILARITY = 0.6
 TOKEN_PATTERN = re.compile(r"[a-z0-9']+")
 
 
@@ -53,7 +64,17 @@ def as_hit(row: dict, score: float = 0.0) -> Hit:
 
 
 def visual_hits(table, vector: list[float], where: str | None, limit: int) -> list[Hit]:
-    query = table.search(vector).metric("cosine")
+    return _ann_hits(table, vector, EMBEDDING_COLUMN, where, limit)
+
+
+def dense_transcript_hits(table, vector: list[float], where: str | None, limit: int) -> list[Hit]:
+    """Transcript moments by cosine similarity in the text embedding space."""
+    hits = _ann_hits(table, vector, TEXT_EMBEDDING_COLUMN, where, limit)
+    return [hit for hit in hits if hit.score >= MIN_SIMILARITY]
+
+
+def _ann_hits(table, vector: list[float], column: str, where: str | None, limit: int) -> list[Hit]:
+    query = table.search(vector, vector_column_name=column).metric("cosine")
     if where is not None:
         query = query.where(where)
     rows = query.limit(limit).to_list()

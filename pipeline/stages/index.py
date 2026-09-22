@@ -1,15 +1,16 @@
 """Index stage: replace this asset's rows in the shared LanceDB index.
 
-Reads frames.json, embeddings.npy, shots.json, transcript.json, probe.json,
-proxy.mp4, and the asset's manifest. Rows for this asset are deleted and
-rewritten, so rerunning is idempotent and other assets in the index are
-untouched. Every moment records the embedding model, precision, and revision
-that produced it, so a model change is a re-embed rather than a full re-ingest.
-Transcript segments with word timestamps and the moment thumbnails are indexed
-too, so search, lookup, and range reads are served from the index alone (the
-demo deploys the built index, not the work directory). The playback proxy is
-mirrored into the index alongside the thumbnails, so the web player plays from
-the same self-contained artifact. See pipeline/stages/__init__.py for the stage
+Reads frames.json, embeddings.npy, text_embeddings.npy, shots.json,
+transcript.json, probe.json, proxy.mp4, and the asset's manifest. Rows for this
+asset are deleted and rewritten, so rerunning is idempotent and other assets in
+the index are untouched. Every moment records the visual embedding model,
+precision, and revision, and transcript moments also record the text space, so
+a model change is a re-embed rather than a full re-ingest. Transcript segments
+with word timestamps and the moment thumbnails are indexed too, so search,
+lookup, and range reads are served from the index alone (the demo deploys the
+built index, not the work directory). The playback proxy is mirrored into the
+index alongside the thumbnails, so the web player plays from the same
+self-contained artifact. See pipeline/stages/__init__.py for the stage
 protocol.
 """
 
@@ -30,14 +31,16 @@ INDEX_DIR = "index"
 MOMENTS = "moments"
 ASSETS = "assets"
 TRANSCRIPTS = "transcripts"
-INDEX_VERSION = 3
+INDEX_VERSION = 4
 FRAMES_ARTIFACT = "frames.json"
 EMBED_ARTIFACT = "embeddings.npy"
+TEXT_EMBED_ARTIFACT = "text_embeddings.npy"
 SHOTS_ARTIFACT = "shots.json"
 TRANSCRIPT_ARTIFACT = "transcript.json"
 PROBE_ARTIFACT = "probe.json"
 PROXY_ARTIFACT = "proxy.mp4"
 MANIFEST = "manifest.json"
+TEXT_SPACE_KEYS = ("text_model", "text_precision", "text_revision", "text_dimension")
 
 ASSET_SCHEMA = pa.schema(
     [
@@ -78,16 +81,18 @@ TRANSCRIPT_SCHEMA = pa.schema(
 def run(source: Path, out_dir: Path) -> dict:
     out_dir = Path(out_dir)
     frames = _artifact(out_dir, FRAMES_ARTIFACT)
-    embeddings = _embeddings(out_dir)
+    embeddings = _embeddings(out_dir, EMBED_ARTIFACT)
+    text_embeddings = _embeddings(out_dir, TEXT_EMBED_ARTIFACT)
     shots = _artifact(out_dir, SHOTS_ARTIFACT)["shots"]
     segments = _artifact(out_dir, TRANSCRIPT_ARTIFACT)["segments"]
     probe = _artifact(out_dir, PROBE_ARTIFACT)
     manifest = _artifact(out_dir, MANIFEST)
     embed = manifest["stages"]["embed"]["outputs"]
+    _check_text_space(embed, len(segments), text_embeddings)
     asset = manifest["asset"]
-    moments = _moments(frames["samples"], embeddings, shots, segments, asset, embed)
+    moments = _moments(frames["samples"], embeddings, text_embeddings, shots, segments, asset, embed)
     index_dir = out_dir.parent / INDEX_DIR
-    _write(index_dir, asset, probe, moments, embeddings.shape[1], segments)
+    _write(index_dir, asset, probe, moments, embeddings.shape[1], text_embeddings.shape[1], segments)
     _copy_thumbnails(out_dir, index_dir, asset["id"], frames["samples"])
     _copy_proxy(out_dir, index_dir, asset["id"])
     return {"index": INDEX_DIR, "moments": len(moments), "assets": 1}
@@ -96,12 +101,14 @@ def run(source: Path, out_dir: Path) -> dict:
 def _moments(
     samples: list[dict],
     embeddings: np.ndarray,
+    text_embeddings: np.ndarray,
     shots: list[dict],
     segments: list[dict],
     asset: dict,
     embed: dict,
 ) -> list[dict]:
     moments = []
+    text_space = _text_space(embed)
     for index, sample in enumerate(samples):
         embedding = embeddings[index].tolist()
         time_ms = round(float(sample["time_s"]) * 1000)
@@ -109,6 +116,8 @@ def _moments(
             start_s, end_s, shot_index, segment_index, snippet = _range(
                 kind, sample, shots, segments
             )
+            transcript = kind == "transcript"
+            text = text_space if transcript else {}
             moments.append(
                 {
                     "id": f"{asset['id']}-{kind}-{time_ms:08d}",
@@ -124,6 +133,10 @@ def _moments(
                     "embedding_model": embed["model"],
                     "embedding_precision": embed["precision"],
                     "embedding_revision": embed["revision"],
+                    "text_embedding": text_embeddings[segment_index].tolist() if transcript else None,
+                    "text_embedding_model": text.get("text_model"),
+                    "text_embedding_precision": text.get("text_precision"),
+                    "text_embedding_revision": text.get("text_revision"),
                     "index_version": INDEX_VERSION,
                 }
             )
@@ -152,7 +165,8 @@ def _write(
     asset: dict,
     probe: dict,
     moments: list[dict],
-    dimension: int,
+    visual_dimension: int,
+    text_dimension: int,
     segments: list[dict],
 ) -> None:
     index_dir.mkdir(parents=True, exist_ok=True)
@@ -167,8 +181,17 @@ def _write(
         "index_version": INDEX_VERSION,
     }
     existing = set(db.list_tables().tables)
+    _check_writable(db, existing)
     _upsert(db, ASSETS, ASSET_SCHEMA, "id", asset["id"], [asset_row], existing)
-    _upsert(db, MOMENTS, _moment_schema(dimension), "asset_id", asset["id"], moments, existing)
+    _upsert(
+        db,
+        MOMENTS,
+        _moment_schema(visual_dimension, text_dimension),
+        "asset_id",
+        asset["id"],
+        moments,
+        existing,
+    )
     transcripts = _transcript_rows(asset["id"], segments)
     _upsert(db, TRANSCRIPTS, TRANSCRIPT_SCHEMA, "asset_id", asset["id"], transcripts, existing)
 
@@ -211,6 +234,24 @@ def _transcript_rows(asset_id: str, segments: list[dict]) -> list[dict]:
     ]
 
 
+def _check_writable(db, existing: set[str]) -> None:
+    """Refuse to mix rows with an index built by another version.
+
+    A version bump means a schema change, so the old table cannot accept this
+    asset's rows. Rebuilding is the recovery path; silently dropping the other
+    assets would be the failure mode of an automatic rebuild.
+    """
+    if MOMENTS not in existing:
+        return
+    table = db.open_table(MOMENTS)
+    fields = {field.name for field in table.schema}
+    if "text_embedding" not in fields or table.count_rows(f"index_version != {INDEX_VERSION}"):
+        raise IngestError(
+            "the index was built by another shotgrep version; delete the index directory "
+            "and re-index every asset"
+        )
+
+
 def _upsert(
     db,
     name: str,
@@ -220,19 +261,21 @@ def _upsert(
     rows: list[dict],
     existing: set[str],
 ) -> None:
+    # Non-transcript moments carry no text vector; LanceDB treats those nulls
+    # as bad vectors unless told to keep them as nulls (they are skipped by ANN).
     table = pa.Table.from_pylist(rows, schema=schema)
     if name in existing:
         target = db.open_table(name)
         target.delete(f"{key} = '{key_value}'")
         if rows:
-            target.add(table)
+            target.add(table, on_bad_vectors="null")
     elif rows:
-        db.create_table(name, data=table)
+        db.create_table(name, data=table, on_bad_vectors="null")
     else:
         db.create_table(name, schema=schema)
 
 
-def _moment_schema(dimension: int) -> pa.Schema:
+def _moment_schema(visual_dimension: int, text_dimension: int) -> pa.Schema:
     return pa.schema(
         [
             pa.field("id", pa.string(), nullable=False),
@@ -244,20 +287,43 @@ def _moment_schema(dimension: int) -> pa.Schema:
             pa.field("snippet", pa.string()),
             pa.field("shot_index", pa.int32()),
             pa.field("segment_index", pa.int32()),
-            pa.field("embedding", pa.list_(pa.float32(), dimension), nullable=False),
+            pa.field("embedding", pa.list_(pa.float32(), visual_dimension), nullable=False),
             pa.field("embedding_model", pa.string(), nullable=False),
             pa.field("embedding_precision", pa.string(), nullable=False),
             pa.field("embedding_revision", pa.string(), nullable=False),
+            pa.field("text_embedding", pa.list_(pa.float32(), text_dimension)),
+            pa.field("text_embedding_model", pa.string()),
+            pa.field("text_embedding_precision", pa.string()),
+            pa.field("text_embedding_revision", pa.string()),
             pa.field("index_version", pa.int32(), nullable=False),
         ]
     )
 
 
-def _embeddings(out_dir: Path) -> np.ndarray:
-    path = out_dir / EMBED_ARTIFACT
+def _embeddings(out_dir: Path, name: str) -> np.ndarray:
+    path = out_dir / name
     if not path.is_file():
-        raise IngestError(f"{EMBED_ARTIFACT} is missing; run the embed stage first")
+        raise IngestError(f"{name} is missing; run the embed stage first")
     return np.load(path)
+
+
+def _check_text_space(embed: dict, segment_count: int, text_embeddings: np.ndarray) -> None:
+    _text_space(embed)
+    if text_embeddings.shape[0] != segment_count:
+        raise IngestError(
+            f"{TEXT_EMBED_ARTIFACT} holds {text_embeddings.shape[0]} vectors for "
+            f"{segment_count} transcript segments; rerun the embed stage"
+        )
+
+
+def _text_space(embed: dict) -> dict:
+    """The embed stage's text-space metadata; older manifests have none."""
+    missing = [key for key in TEXT_SPACE_KEYS if key not in embed]
+    if missing:
+        raise IngestError(
+            f"the manifest has no {', '.join(missing)}; rerun the embed stage to build the text space"
+        )
+    return {key: embed[key] for key in TEXT_SPACE_KEYS}
 
 
 def _artifact(out_dir: Path, name: str) -> dict:

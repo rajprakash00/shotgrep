@@ -31,7 +31,7 @@ from typing import Protocol
 
 import lancedb
 
-from api.retrieval import VISUAL_KIND_CLAUSE, Hit, visual_hits
+from api.retrieval import TRANSCRIPT_KIND_CLAUSE, VISUAL_KIND_CLAUSE, Hit, visual_hits
 from api.service import DEFAULT_K, QueryService
 from eval.metrics import RECALL_K, Label, Observation, score_by_film, score_by_split
 from eval.queries import QuerySet, QuerySetError, film_titles, index_asset_ids, load_queries
@@ -151,7 +151,7 @@ def index_metadata(index_dir: Path) -> dict:
     if not sample:
         raise IngestError(f"the index at {index_dir} has no moments; re-ingest")
     row = sample[0]
-    return {
+    metadata = {
         "model": row["embedding_model"],
         "precision": row["embedding_precision"],
         "revision": row["embedding_revision"],
@@ -159,6 +159,17 @@ def index_metadata(index_dir: Path) -> dict:
         "moments": moments.count_rows(),
         "index_version": row["index_version"],
     }
+    transcript = (
+        moments.search()
+        .where(f"{TRANSCRIPT_KIND_CLAUSE} AND text_embedding_model IS NOT NULL")
+        .limit(1)
+        .to_list()
+    )
+    if transcript:
+        metadata["text_model"] = transcript[0]["text_embedding_model"]
+        metadata["text_precision"] = transcript[0]["text_embedding_precision"]
+        metadata["text_revision"] = transcript[0]["text_embedding_revision"]
+    return metadata
 
 
 def file_hash(path: Path) -> str:

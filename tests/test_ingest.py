@@ -570,6 +570,50 @@ def test_embed_stage_embeds_every_frame_sample(tmp_path: Path) -> None:
     assert np.allclose(np.linalg.norm(embeddings, axis=1), 1.0, atol=1e-3)
 
 
+def test_embed_stage_embeds_every_transcript_segment(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    manifest = read_manifest(work)
+    outputs = manifest["stages"]["embed"]["outputs"]
+    assert outputs["text_artifact"] == "text_embeddings.npy"
+    assert outputs["text_precision"] == "int8"
+    assert outputs["text_dimension"] == 384
+    assert outputs["text_model"]
+    assert outputs["text_revision"]
+
+    embeddings = np.load(manifest_path(work).parent / outputs["text_artifact"])
+    segments = read_transcript(work)["segments"]
+    assert outputs["text_count"] == len(segments)
+    assert embeddings.shape == (len(segments), outputs["text_dimension"])
+    assert embeddings.dtype == np.float32
+    assert np.allclose(np.linalg.norm(embeddings, axis=1), 1.0, atol=1e-3)
+
+
+def test_index_stage_embeds_transcript_moments_in_text_space(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    embed = read_manifest(work)["stages"]["embed"]["outputs"]
+    rows = index_rows(work, "moments")
+    transcript_rows = [row for row in rows if row["kind"] == "transcript"]
+    assert transcript_rows, "the fixture has speech"
+    for row in transcript_rows:
+        assert len(row["text_embedding"]) == embed["text_dimension"]
+        assert np.linalg.norm(row["text_embedding"]) == pytest.approx(1.0, abs=1e-3)
+        assert row["text_embedding_model"] == embed["text_model"]
+        assert row["text_embedding_precision"] == embed["text_precision"]
+        assert row["text_embedding_revision"] == embed["text_revision"]
+    for row in rows:
+        if row["kind"] != "transcript":
+            assert row["text_embedding"] is None
+            assert row["text_embedding_model"] is None
+            assert row["text_embedding_precision"] is None
+            assert row["text_embedding_revision"] is None
+
+
 def test_index_stage_holds_moments_of_every_kind(tmp_path: Path) -> None:
     work = tmp_path / "work"
     result = run_ingest(FIXTURE, work)
@@ -637,12 +681,31 @@ def test_index_stage_holds_transcript_segments_with_words(tmp_path: Path) -> Non
         ]
 
 
+def test_index_stage_refuses_an_index_from_another_version(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+
+    import pyarrow as pa
+
+    db = lancedb.connect(str(manifest_path(work).parent.parent / "index"))
+    arrow = db.open_table("moments").to_arrow()
+    schema = pa.schema([field for field in arrow.schema if not field.name.startswith("text_embedding")])
+    old_rows = [{name: row[name] for name in schema.names} for row in arrow.to_pylist()]
+    db.create_table("moments", data=pa.Table.from_pylist(old_rows, schema=schema), mode="overwrite")
+
+    result = run_ingest(FIXTURE, work, "--from-stage", "index")
+    assert result.returncode != 0
+    assert "another shotgrep version" in result.stderr
+
+
 def test_rerun_embed_and_index_is_idempotent(tmp_path: Path) -> None:
     work = tmp_path / "work"
     first = run_ingest(FIXTURE, work)
     assert first.returncode == 0, first.stderr
     before = read_manifest(work)
     embeddings = read_artifact(work, "embeddings.npy")
+    text_embeddings = read_artifact(work, "text_embeddings.npy")
     frames = read_artifact(work, "frames.json")
     moments = index_rows(work, "moments")
     assets = index_rows(work, "assets")
@@ -654,6 +717,7 @@ def test_rerun_embed_and_index_is_idempotent(tmp_path: Path) -> None:
     assert after["stages"]["embed"]["outputs"] == before["stages"]["embed"]["outputs"]
     assert after["stages"]["index"]["outputs"] == before["stages"]["index"]["outputs"]
     assert read_artifact(work, "embeddings.npy") == embeddings
+    assert read_artifact(work, "text_embeddings.npy") == text_embeddings
     assert read_artifact(work, "frames.json") == frames
     assert index_rows(work, "moments") == moments
     assert index_rows(work, "assets") == assets
