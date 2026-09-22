@@ -42,6 +42,7 @@ Decisions are deliberate. Alternatives are listed so future changes are cheap.
 
 - Local: docker-compose.
 - Demo: Fly.io (API, 1 shared CPU / 1 GB) + Vercel (web). Budget target ≤ $10/month.
+- Demo media: playback proxies packed as a GitHub release asset and fetched into `index/` at image build (ADR-0004).
 - CI: GitHub Actions (lint, unit tests, fixture ingest smoke test).
 
 ## Rejected for v1

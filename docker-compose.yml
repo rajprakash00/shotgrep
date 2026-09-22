@@ -1,0 +1,28 @@
+# Local demo: API on http://localhost:8000, web player on http://localhost:3000.
+#
+#   docker compose up --build
+#
+# The API image fetches the playback media from the demo-media-v4 GitHub
+# release during build. If that release is not published yet, the build warns
+# and continues: search and thumbnails work and playback 404s. Build the
+# archive with `python3 scripts/demo_media.py pack` and see docs/deploy.md to
+# publish it. A published archive that fails hash verification fails the build.
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8080"
+    environment:
+      SHOTGREP_API_URL: http://localhost:8000
+      SHOTGREP_WEB_URL: http://localhost:3000
+
+  web:
+    build:
+      context: web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api

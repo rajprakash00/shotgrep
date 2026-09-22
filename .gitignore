@@ -1,7 +1,11 @@
 # artifacts
 work/
 corpus/media/
+dist/
 *.log
+
+# fetched playback media (packed into the demo-media release)
+index/*/proxy.mp4
 
 # python
 .venv/

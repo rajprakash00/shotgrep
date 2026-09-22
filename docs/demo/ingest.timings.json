@@ -1,0 +1,38 @@
+{
+  "recorded": "2026-09-22",
+  "source": {
+    "title": "Mars in a Minute: How Do You Choose a Landing Site?",
+    "author": "NASA Jet Propulsion Laboratory",
+    "license": "Public domain",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/f/fb/Mars_in_a_Minute-_How_Do_You_Choose_a_Landing_Site-.webm",
+    "sha256": "a32a55492177632af63b562b77d220dfc6e653f81349db21458685c95723127e",
+    "bytes": 6278449,
+    "duration_s": 60.061
+  },
+  "machine": {
+    "cpus": 3,
+    "asr_device": "cuda",
+    "asr_model": "large-v3",
+    "asr_compute_type": "int8",
+    "proxy_encoder": "h264_nvenc",
+    "visual_model": "Xenova/siglip-base-patch16-224",
+    "visual_precision": "int8",
+    "text_model": "Xenova/bge-small-en-v1.5",
+    "text_precision": "int8"
+  },
+  "wall_clock_s": 72,
+  "realtime_factor": 0.834,
+  "stages_ms": {
+    "probe": 99,
+    "proxy": 8834,
+    "shots": 8721,
+    "asr": 29185,
+    "frames": 5536,
+    "embed": 13575,
+    "index": 264
+  },
+  "segments": 11,
+  "words": 179,
+  "moments": 73,
+  "cast": "docs/demo/ingest.cast"
+}

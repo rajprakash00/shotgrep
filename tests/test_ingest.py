@@ -11,6 +11,7 @@ import functools
 import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -20,6 +21,8 @@ from pathlib import Path
 import lancedb
 import numpy as np
 import pytest
+
+from pipeline.stages import STAGES
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "clip.mp4"
@@ -240,6 +243,27 @@ def test_rerun_is_byte_identical(tmp_path: Path) -> None:
     second = run_ingest(FIXTURE, work)
     assert second.returncode == 0, second.stderr
     assert path.read_bytes() == before
+
+
+def test_verbose_ingest_reports_stage_timings_in_order(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work, "--verbose")
+    assert result.returncode == 0, result.stderr
+
+    stages = [stage.NAME for stage in STAGES]
+    lines = result.stderr.splitlines()
+    assert len(lines) == len(stages), result.stderr
+    for line, stage in zip(lines, stages, strict=True):
+        assert re.fullmatch(rf"{stage}: complete in \d+\.\d+s", line), line
+    assert "manifest:" in result.stdout
+    assert "complete in" not in result.stdout
+
+
+def test_ingest_is_quiet_without_verbose(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    result = run_ingest(FIXTURE, work)
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
 
 
 def test_missing_input_fails_without_manifest(tmp_path: Path) -> None:

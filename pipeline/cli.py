@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from pipeline.errors import IngestError
@@ -29,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[stage.NAME for stage in STAGES],
         metavar="STAGE",
         help="rerun stages from STAGE onward; earlier stages must already be complete",
+    )
+    ingest_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="print each stage's wall-clock time to stderr as it completes",
     )
     search_parser = subparsers.add_parser("search", help="search indexed moments with a natural-language query")
     search_parser.add_argument("query", help="natural-language description of the moment")
@@ -73,7 +79,7 @@ def _positive_int(value: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "ingest":
-        return _ingest(args.input, args.work_dir, args.from_stage)
+        return _ingest(args.input, args.work_dir, args.from_stage, args.verbose)
     if args.command == "search":
         return _search(args.query, args.work_dir, args.k)
     if args.command == "serve":
@@ -83,15 +89,23 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
-def _ingest(source: Path, work_dir: Path, from_stage: str | None) -> int:
+def _ingest(source: Path, work_dir: Path, from_stage: str | None, verbose: bool) -> int:
+    progress = _stage_printer() if verbose else None
     try:
-        manifest = ingest(source, work_dir, from_stage=from_stage)
+        manifest = ingest(source, work_dir, from_stage=from_stage, progress=progress)
     except IngestError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(f"manifest: {manifest.path}")
     print(f"status: {manifest.status}")
     return 0
+
+
+def _stage_printer() -> Callable[[str, int], None]:
+    def report(name: str, duration_ms: int) -> None:
+        print(f"{name}: complete in {duration_ms / 1000:.1f}s", file=sys.stderr)
+
+    return report
 
 
 def _search(query: str, work_dir: Path, k: int) -> int:

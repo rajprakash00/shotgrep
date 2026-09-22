@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "index_version": 4,
+  "assets": [
+    {
+      "asset_id": "738e2f999860553d056dd79c952f58f63cbb73892a57c72342ce9e5330d9d2d7",
+      "path": "738e2f999860553d056dd79c952f58f63cbb73892a57c72342ce9e5330d9d2d7/proxy.mp4",
+      "bytes": 39930308,
+      "sha256": "13eed2c429372931941770c1b9bcdd4dc7f086c355e56d7bc1ed78ac9e22be58"
+    },
+    {
+      "asset_id": "a7dbacae5fa2bc345dbd7b10588575f3e2bba36012e9a93df5346467053b0634",
+      "path": "a7dbacae5fa2bc345dbd7b10588575f3e2bba36012e9a93df5346467053b0634/proxy.mp4",
+      "bytes": 33945305,
+      "sha256": "c9bef99afd66ecc5c79d50e24ec5ab8f20fa8c441bfb0178c9c1dce492ffcc3e"
+    },
+    {
+      "asset_id": "efa9062d9cdb7a338e40ad530dfdf234806743f29ae6a1a136b97ece4e588e8f",
+      "path": "efa9062d9cdb7a338e40ad530dfdf234806743f29ae6a1a136b97ece4e588e8f/proxy.mp4",
+      "bytes": 136682019,
+      "sha256": "10ffc4c25a5ac1a70be3d5e501bb7cc1e71c08e469445bf7438fb07a9e81446f"
+    },
+    {
+      "asset_id": "f12c070e295b38cfc94ebd61ac3357c3bac82d1015985f1e8da93a4c6496c46d",
+      "path": "f12c070e295b38cfc94ebd61ac3357c3bac82d1015985f1e8da93a4c6496c46d/proxy.mp4",
+      "bytes": 144539248,
+      "sha256": "d7addae1c7f905021c4ffb7f0f652e972f7eee55ebfad69b14f4f68cc364ec80"
+    }
+  ]
+}
