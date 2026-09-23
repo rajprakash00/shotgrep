@@ -21,7 +21,10 @@ realtime, ASR on CUDA), with every stage's wall clock in
 
 ## Demo
 
-The repository ships the prebuilt corpus index in `index/`, so search works
+**Live:** <https://shotgrep-demo.vercel.app> — instant search over the prebuilt
+corpus (API on Fly.io at <https://shotgrep-demo.fly.dev>, agent tools at `/mcp`).
+
+The repository ships the same prebuilt corpus index in `index/`, so search works
 from a checkout with no ingest:
 
 ```sh
@@ -37,8 +40,8 @@ Or one command with Docker:
 docker compose up --build                 # API on :8000, web on :3000
 ```
 
-The hosted demo (API on Fly.io, web on Vercel) deploys from the same commit;
-the full runbook is [docs/deploy.md](docs/deploy.md).
+The hosted demo (API on Fly.io, web on Vercel) deploys from this commit; the
+full runbook is [docs/deploy.md](docs/deploy.md).
 
 ## How it works
 
