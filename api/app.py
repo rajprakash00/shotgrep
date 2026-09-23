@@ -18,6 +18,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.routing import Route
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from api.contracts import Asset, AssetList, Moment, SearchResponse, Transcript
 from api.mcp_server import create_mcp
@@ -115,10 +117,25 @@ def create_app(
             service.transcript(asset_id, start_s=start_s, end_s=end_s)
         )
 
-    # The MCP endpoint is /mcp; REST paths are matched first.
-    app.mount("/mcp", mcp_app, name="mcp")
+    # The MCP endpoint is /mcp; REST paths are matched first. A Route, not a
+    # Mount, so the advertised path answers directly instead of 307ing to /mcp/.
+    app.router.routes.append(Route("/mcp", _McpRootPath(mcp_app), name="mcp"))
 
     return app
+
+
+class _McpRootPath:
+    """Serves /mcp without a trailing-slash redirect.
+
+    The MCP transport's route lives at "/" inside its own app; this maps the
+    advertised path onto it. Mount would answer /mcp with a 307 to /mcp/.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        await self.app({**scope, "path": "/", "raw_path": b"/"}, receive, send)
 
 
 def _cors_origins(web_url: str) -> list[str]:

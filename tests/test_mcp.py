@@ -282,3 +282,23 @@ async def test_serve_exposes_mcp_beside_rest(work_dir: Path) -> None:
         thread.join(timeout=10)
     assert tools == TOOL_NAMES
     assert [asset["asset_id"] for asset in assets["assets"]] == [FIXTURE_SHA256]
+
+
+def test_mcp_answers_without_trailing_slash(work_dir: Path) -> None:
+    app = create_app(work_dir, api_url=API_URL, web_url=WEB_URL)
+    with TestClient(app, base_url="http://127.0.0.1:8000", follow_redirects=False) as client:
+        response = client.post(
+            "/mcp",
+            headers={"accept": "application/json, text/event-stream"},
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "0"},
+                },
+            },
+        )
+    assert response.status_code == 200, response.headers.get("location")
