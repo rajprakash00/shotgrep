@@ -17,16 +17,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-import onnxruntime as ort
 from huggingface_hub import hf_hub_download
 from tokenizers import Tokenizer
 
 from pipeline.errors import IngestError
+from pipeline.models.onnx import ort
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
-
-ort.set_default_logger_severity(3)
 
 MODEL_ENV = "SHOTGREP_TEXT_EMBED_MODEL"
 PRECISION_ENV = "SHOTGREP_TEXT_EMBED_PRECISION"
