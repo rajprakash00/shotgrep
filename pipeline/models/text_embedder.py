@@ -5,7 +5,8 @@ Hugging Face and cached, transcript segments are embedded bare, and queries
 carry the instruction prefix bge expects for retrieval, so both sides live in
 one text space distinct from the SigLIP space that holds frames. Swapping model
 or precision means editing this module; the stages and the query service do not
-change.
+change. Runtime warnings (device discovery on virtualized hosts) stay off the
+CLI's stderr; errors still surface.
 """
 
 from __future__ import annotations
@@ -24,6 +25,8 @@ from pipeline.errors import IngestError
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
+
+ort.set_default_logger_severity(3)
 
 MODEL_ENV = "SHOTGREP_TEXT_EMBED_MODEL"
 PRECISION_ENV = "SHOTGREP_TEXT_EMBED_PRECISION"
