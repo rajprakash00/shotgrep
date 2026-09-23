@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from pipeline.errors import IngestError
@@ -17,9 +18,16 @@ from pipeline.manifest import Manifest
 from pipeline.stages import STAGES
 
 CHUNK = 1 << 20
+Progress = Callable[[str, int], None]
 
 
-def ingest(source: Path, work_dir: Path, *, from_stage: str | None = None) -> Manifest:
+def ingest(
+    source: Path,
+    work_dir: Path,
+    *,
+    from_stage: str | None = None,
+    progress: Progress | None = None,
+) -> Manifest:
     source = _readable_file(Path(source))
     digest, size = _hash(source)
     asset = {
@@ -48,8 +56,11 @@ def ingest(source: Path, work_dir: Path, *, from_stage: str | None = None) -> Ma
             manifest.set_status(manifest.overall_status(names))
             manifest.save()
             raise IngestError(f"{stage.NAME} stage failed: {exc}") from exc
-        manifest.record_success(stage.NAME, outputs, _elapsed_ms(started))
+        duration_ms = _elapsed_ms(started)
+        manifest.record_success(stage.NAME, outputs, duration_ms)
         manifest.save()
+        if progress is not None:
+            progress(stage.NAME, duration_ms)
 
     manifest.set_status(manifest.overall_status(names))
     manifest.save()

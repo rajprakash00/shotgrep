@@ -21,6 +21,7 @@ Shared vocabulary for this project. Use these terms in code, docs, and issues.
 | **time hint** | Query language that names a position inside an asset, such as "opening" or "final". Drives a position prior. |
 | **negation filter** | A post-retrieval step that removes candidate moments containing an object the query explicitly excludes. |
 | **corpus** | A fixed set of assets used for the demo and the eval. |
+| **demo media** | The corpus playback proxies, packed as a release asset and fetched into the index; distinct from the source corpus media. |
 | **query split** | Eval grouping: `easy`, `paraphrase`, `temporal`, `negation`. Frozen before tuning. |
 | **deep link** | A URL that opens the web player at a moment's timestamp. |
 | **tool** | An MCP function an agent can call over the index. |

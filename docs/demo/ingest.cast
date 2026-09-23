@@ -1,0 +1,12 @@
+{"version": 2, "width": 100, "height": 30, "timestamp": 1790077361, "env": {"SHELL": "/usr/bin/zsh", "TERM": "xterm-256color"}, "title": "shotgrep ingest: Mars in a Minute (NASA/JPL, public domain)"}
+[0.018323, "o", "$ shotgrep ingest /tmp/opencode/ingest-demo/mars_in_a_minute.webm --work-dir work/ingest-demo --verbose\r\n"]
+[2.301063, "o", "probe: complete in 0.1s\r\n"]
+[11.136625, "o", "proxy: complete in 8.8s\r\n"]
+[19.861863, "o", "shots: complete in 8.7s\r\n"]
+[49.058503, "o", "asr: complete in 29.2s\r\n"]
+[54.582779, "o", "frames: complete in 5.5s\r\n"]
+[68.160144, "o", "embed: complete in 13.6s\r\n"]
+[68.424286, "o", "index: complete in 0.3s\r\n"]
+[68.424967, "o", "manifest: work/ingest-demo/a32a55492177632af63b562b77d220dfc6e653f81349db21458685c95723127e/manifest.json\r\nstatus: complete\r\n"]
+[72.328962, "o", "\r\nfile:     mars_in_a_minute.webm (6.3 MB, 60.1 s)\r\nasset id: a32a55492177632af63b562b77d220dfc6e653f81349db21458685c95723127e\r\nstatus:   complete\r\n\r\nstage     wall clock\r\nprobe           0.1s\r\nproxy           8.8s\r\nshots           8.7s\r\nasr            29.2s\r\nframes          5.5s\r\n"]
+[72.32902, "o", "embed          13.6s\r\nindex           0.3s\r\n\r\ntotal:    72 s wall clock, 0.83x realtime on this machine\r\n"]

@@ -1,0 +1,31 @@
+# Fly.io config for the shotgrep demo API.
+#
+# Rename `app` if the name is taken, then set the three public URLs below to
+# the deployed API host, the deployed web origin, and the same API host (MCP
+# transport allowlist). See docs/deploy.md for the full runbook.
+
+app = "shotgrep-demo"
+primary_region = "iad"
+
+[env]
+  SHOTGREP_API_URL = "https://shotgrep-demo.fly.dev"
+  SHOTGREP_WEB_URL = "https://shotgrep-demo.vercel.app"
+  SHOTGREP_MCP_ALLOWED_HOSTS = "shotgrep-demo.fly.dev"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

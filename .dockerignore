@@ -1,0 +1,22 @@
+# Build context: only what the API image needs.
+.git
+.github
+.venv
+.vercel
+__pycache__
+.pytest_cache
+.ruff_cache
+*.log
+
+# Work artifacts and corpus media stay out; the committed index is enough.
+work
+corpus/media
+dist
+index/*/proxy.mp4
+
+# Tests, eval, and the web app have their own build.
+tests
+eval
+web
+docs
+node_modules

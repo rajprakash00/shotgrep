@@ -1,0 +1,6 @@
+# The web image builds from this directory; node_modules and build output stay out.
+node_modules
+.next
+.vercel
+*.tsbuildinfo
+next-env.d.ts

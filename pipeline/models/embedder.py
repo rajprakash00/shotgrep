@@ -4,7 +4,9 @@ SiglipOnnxEmbedder hides the runtime: the ONNX int8 export is fetched once
 from Hugging Face and cached, images are preprocessed the way the model card
 prescribes, and frame and query embeddings go through the same model,
 precision, and revision, so both live in one vector space. Swapping model or
-precision means editing this module; the stages do not change.
+precision means editing this module; the stages do not change. Runtime warnings
+(device discovery on virtualized hosts) stay off the CLI's stderr; errors still
+surface.
 """
 
 from __future__ import annotations
@@ -15,12 +17,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-import onnxruntime as ort
 from huggingface_hub import hf_hub_download
 from PIL import Image
 from tokenizers import Tokenizer
 
 from pipeline.errors import IngestError
+from pipeline.models.onnx import ort
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray

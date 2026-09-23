@@ -5,7 +5,8 @@ Hugging Face and cached, transcript segments are embedded bare, and queries
 carry the instruction prefix bge expects for retrieval, so both sides live in
 one text space distinct from the SigLIP space that holds frames. Swapping model
 or precision means editing this module; the stages and the query service do not
-change.
+change. Runtime warnings (device discovery on virtualized hosts) stay off the
+CLI's stderr; errors still surface.
 """
 
 from __future__ import annotations
@@ -16,11 +17,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-import onnxruntime as ort
 from huggingface_hub import hf_hub_download
 from tokenizers import Tokenizer
 
 from pipeline.errors import IngestError
+from pipeline.models.onnx import ort
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
