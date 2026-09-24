@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 
 import { EmptyResults, ErrorState, IdleState, SkeletonGrid } from "@/components/ResultStates";
 import ResultsGrid from "@/components/ResultsGrid";
+import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY } from "@/components/buttonStyles";
 import { errorMessage, searchMoments } from "@/lib/api";
 import type { SearchPayload } from "@/lib/types";
 import { useAssetNames } from "@/lib/use-asset-names";
@@ -80,7 +81,7 @@ export default function SearchClient({ query }: { query: string }) {
 
   return (
     <div>
-      <form role="search" onSubmit={onSubmit} className="flex gap-2">
+      <form role="search" onSubmit={onSubmit} className="mt-7 flex max-w-3xl items-stretch gap-3">
         <label htmlFor="moment-search" className="sr-only">
           Search moments
         </label>
@@ -92,49 +93,51 @@ export default function SearchClient({ query }: { query: string }) {
           placeholder="the part where he parks the bike at night"
           autoComplete="off"
           spellCheck={false}
-          className="h-11 w-full rounded-lg border border-white/10 bg-zinc-900/60 px-3.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-white/30 focus:outline-none"
+          className="h-12 w-full border border-ink bg-card px-3.5 font-code text-sm shadow-input transition placeholder:text-ink-soft focus:border-stamp focus:shadow-input-focus"
         />
-        <button
-          type="submit"
-          className="h-11 shrink-0 rounded-lg bg-zinc-100 px-4 text-sm font-medium text-zinc-950 transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
-        >
+        <button type="submit" className={BUTTON_PRIMARY}>
           Search
         </button>
       </form>
 
-      <div className="mt-6 min-h-[32rem]" aria-live="polite" aria-busy={loading}>
+      <div className="perforation mt-10" aria-hidden />
+
+      <div className="mt-10 min-h-[24rem]" aria-live="polite" aria-busy={loading}>
         {!query ? (
           <IdleState onExample={searchExample} />
         ) : !payload && error ? (
-          <ErrorState title="The search index is unavailable" message={error} onRetry={retry} />
+          <ErrorState title="The index could not be reached" message={error} onRetry={retry} />
         ) : !payload ? (
           <SkeletonGrid />
         ) : results.length === 0 ? (
           <EmptyResults query={query} />
         ) : (
           <>
-            <p className="mb-4 text-xs text-zinc-500">
-              {results.length} {results.length === 1 ? "moment" : "moments"} for “{query}”
-            </p>
-            <ResultsGrid moments={results} assetNames={assetNames} />
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-ink pb-2">
+              <p className="font-code text-xs uppercase tracking-[0.2em]">
+                {results.length} {results.length === 1 ? "moment" : "moments"} for “{query}”
+              </p>
+              <p className="font-code text-[11px] uppercase tracking-[0.16em] text-ink-soft">
+                ranked by fused score
+              </p>
+            </div>
+            <div className="mt-6">
+              <ResultsGrid moments={results} assetNames={assetNames} />
+            </div>
             {error ? (
-              <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm text-red-300">
-                <span>{error}</span>
-                <button
-                  type="button"
-                  onClick={retry}
-                  className="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs font-medium text-red-100 transition hover:border-red-300/60 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300"
-                >
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                <span className="font-code text-xs text-stamp">{error}</span>
+                <button type="button" onClick={retry} className={BUTTON_DANGER}>
                   Try again
                 </button>
               </div>
             ) : results.length >= limit && limit < MAX_K ? (
-              <div className="mt-8 flex justify-center">
+              <div className="mt-10 flex justify-center">
                 <button
                   type="button"
                   disabled={loading}
                   onClick={loadMore}
-                  className="rounded-lg border border-white/15 px-4 py-2 text-sm text-zinc-300 transition hover:border-white/30 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 disabled:opacity-50"
+                  className={BUTTON_SECONDARY}
                 >
                   {loading ? "Loading…" : "Load more"}
                 </button>

@@ -1,1 +1,64 @@
 @import "tailwindcss";
+
+@theme {
+  --color-paper: oklch(0.95 0.035 132);
+  --color-card: oklch(0.978 0.015 132);
+  --color-paper-deep: oklch(0.9 0.05 132);
+  --color-ink: oklch(0.27 0.045 145);
+  --color-ink-soft: oklch(0.43 0.04 145);
+  --color-rule: oklch(0.76 0.04 132);
+  --color-stamp: oklch(0.48 0.17 15);
+  --shadow-card: 3px 3px 0 0 var(--color-rule);
+  --shadow-card-hover: 4px 4px 0 0 var(--color-stamp);
+  --shadow-button: 3px 3px 0 0 var(--color-ink);
+  --shadow-button-small: 2px 2px 0 0 var(--color-ink);
+  --shadow-chip: 2px 2px 0 0 var(--color-rule);
+  --shadow-chip-hover: 2px 2px 0 0 var(--color-stamp);
+  --shadow-input: 3px 3px 0 0 var(--color-rule);
+  --shadow-input-focus: 3px 3px 0 0 var(--color-stamp);
+  --shadow-player: 6px 6px 0 0 var(--color-rule);
+}
+
+@theme inline {
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-body: var(--font-archivo), system-ui, sans-serif;
+  --font-code: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  ::selection {
+    background: var(--color-stamp);
+    color: var(--color-card);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-stamp);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility paper-surface {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/><feComponentTransfer><feFuncA type='linear' slope='0.05'/></feComponentTransfer></filter><rect width='180' height='180' filter='url(%23n)'/></svg>"),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 27px,
+      color-mix(in oklab, var(--color-paper-deep) 55%, transparent) 27px 28px
+    );
+}
+
+@utility perforation {
+  height: 8px;
+  background-image: radial-gradient(circle, var(--color-rule) 1.5px, transparent 1.6px);
+  background-size: 14px 8px;
+  background-position: 7px 4px;
+}
