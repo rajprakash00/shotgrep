@@ -68,8 +68,8 @@ export default function WatchClient({
   if (load.status === "loading") {
     return (
       <div className="mt-6" aria-busy="true">
-        <div className="h-6 w-56 animate-pulse rounded bg-zinc-800" />
-        <div className="mt-4 aspect-video w-full animate-pulse rounded-xl bg-zinc-900" />
+        <div className="h-6 w-56 animate-pulse bg-paper-deep" />
+        <div className="mt-4 aspect-video w-full animate-pulse border border-rule bg-paper-deep" />
       </div>
     );
   }
@@ -79,15 +79,15 @@ export default function WatchClient({
   return (
     <div className="mt-6">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-100">{asset.filename}</h1>
-        <p className="font-mono text-xs tabular-nums text-zinc-500">
+        <h1 className="font-display text-2xl font-semibold tracking-tight">{asset.filename}</h1>
+        <p className="font-code text-xs tabular-nums text-ink-soft">
           {formatClock(asset.duration_s)} · {asset.fps.toFixed(2)} fps · {asset.codec.toUpperCase()}
         </p>
       </div>
       {startSeconds > 0 ? (
-        <p className="mt-1 text-xs text-zinc-400">
+        <p className="mt-1 text-xs text-ink-soft">
           Opens at{" "}
-          <span className="font-mono tabular-nums text-zinc-200">
+          <span className="font-code tabular-nums text-ink">
             {formatTimestamp(startSeconds)}
           </span>
         </p>

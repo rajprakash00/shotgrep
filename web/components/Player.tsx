@@ -36,7 +36,7 @@ export default function Player({
       playsInline
       preload="metadata"
       onError={onMediaError}
-      className="aspect-video w-full rounded-xl border border-white/10 bg-black"
+      className="aspect-video w-full border border-ink bg-ink shadow-player"
     />
   );
 }

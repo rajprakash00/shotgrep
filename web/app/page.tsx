@@ -1,4 +1,5 @@
 import SearchClient from "@/components/SearchClient";
+import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 
 export default async function Home({ searchParams }: PageProps<"/">) {
@@ -8,18 +9,22 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-5xl px-6 pb-24">
-        <section className="pb-8 pt-14">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            Search video like it&apos;s text.
-          </h1>
-          <p className="mt-3 max-w-xl text-sm text-zinc-400">
-            Ask for a moment in plain language and open the exact frame. Visual and transcript
-            retrieval are fused, with deep links that survive a reload.
+      <main className="mx-auto w-full max-w-6xl px-6 pb-20">
+        <section className="pt-12">
+          <p className="font-code text-[11px] uppercase tracking-[0.22em] text-ink-soft">
+            A search index for footage
           </p>
+          <h1 className="mt-3 max-w-3xl font-display text-4xl font-semibold leading-[1.05] sm:text-5xl">
+            Search video like it&rsquo;s <em>text</em>.
+          </h1>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-ink-soft">
+            Describe a scene, or quote a line. Visual and transcript retrieval are fused, and
+            every card opens at its timecode.
+          </p>
+          <SearchClient key={query} query={query} />
         </section>
-        <SearchClient key={query} query={query} />
       </main>
+      <SiteFooter />
     </>
   );
 }

@@ -1,3 +1,7 @@
+import type { ReactNode } from "react";
+
+import { BUTTON_SMALL } from "@/components/buttonStyles";
+
 const EXAMPLES = [
   "a rabbit sleeping inside a burrow",
   "a dragon flying over a city at sunset",
@@ -5,38 +9,74 @@ const EXAMPLES = [
   "a ruined city after a machine uprising",
 ];
 
+function NoticeCard({
+  title,
+  message,
+  action,
+  danger,
+  children,
+}: {
+  title: string;
+  message: string;
+  action?: { label: string; onClick: () => void };
+  danger?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      role={danger ? "alert" : undefined}
+      className={`border border-dashed bg-card/70 p-8 ${
+        danger ? "border-stamp" : "border-rule"
+      }`}
+    >
+      <h2 className={`font-display text-xl ${danger ? "text-stamp" : ""}`}>{title}</h2>
+      <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">{message}</p>
+      {action ? (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className={`mt-5 ${BUTTON_SMALL}`}
+        >
+          {action.label}
+        </button>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
 export function IdleState({ onExample }: { onExample: (example: string) => void }) {
   return (
-    <div className="rounded-xl border border-dashed border-white/10 bg-zinc-900/20 p-8">
-      <h2 className="text-sm font-medium text-zinc-300">Ask for a moment in plain language</h2>
-      <p className="mt-1 text-sm text-zinc-500">
-        Transcript and visual search are fused, so quoted speech and described scenes both work.
-      </p>
-      <ul className="mt-5 flex flex-wrap gap-2">
+    <NoticeCard
+      title="Ask for a moment in plain language"
+      message="Transcript and visual search are fused, so quoted speech and described scenes both land in the same catalog."
+    >
+      <ul className="mt-5 flex flex-wrap items-center gap-2">
+        <li className="font-code text-[11px] uppercase tracking-[0.18em] text-ink-soft">
+          From the card catalog
+        </li>
         {EXAMPLES.map((example) => (
           <li key={example}>
             <button
               type="button"
               onClick={() => onExample(example)}
-              className="rounded-full border border-white/10 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-white/25 hover:text-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+              className="border border-ink/60 bg-paper-deep px-2.5 py-1 text-xs shadow-chip transition hover:border-ink hover:shadow-chip-hover"
             >
               {example}
             </button>
           </li>
         ))}
       </ul>
-    </div>
+    </NoticeCard>
   );
 }
 
 export function EmptyResults({ query }: { query: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-white/10 bg-zinc-900/20 p-8">
-      <h2 className="text-sm font-medium text-zinc-300">No moments matched “{query}”</h2>
-      <p className="mt-1 text-sm text-zinc-500">
-        Try a shorter phrase, or describe what is on screen rather than what is said.
-      </p>
-    </div>
+    <NoticeCard
+      title={`No moments matched “${query}”`}
+      message="Try a shorter phrase, or describe what is on screen rather than what is said."
+    />
   );
 }
 
@@ -50,32 +90,19 @@ export function ErrorState({
   onRetry: () => void;
 }) {
   return (
-    <div
-      role="alert"
-      className="rounded-xl border border-red-500/20 bg-red-500/5 p-8 text-sm text-red-200"
-    >
-      <h2 className="font-medium">{title}</h2>
-      <p className="mt-1 text-red-200/80">{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-4 rounded-lg border border-red-400/30 px-3 py-1.5 text-xs font-medium text-red-100 transition hover:border-red-300/60 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300"
-      >
-        Try again
-      </button>
-    </div>
+    <NoticeCard danger title={title} message={message} action={{ label: "Try again", onClick: onRetry }} />
   );
 }
 
 export function SkeletonGrid() {
   return (
-    <ul aria-hidden className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <ul aria-hidden className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }, (_, index) => (
-        <li key={index} className="overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40">
-          <div className="aspect-video animate-pulse bg-zinc-800/60" />
-          <div className="space-y-2 p-3">
-            <div className="h-3 w-24 animate-pulse rounded bg-zinc-800" />
-            <div className="h-3 w-full animate-pulse rounded bg-zinc-800" />
+        <li key={index} className="border border-rule bg-card">
+          <div className="aspect-video animate-pulse bg-paper-deep" />
+          <div className="space-y-2 border-t border-rule p-3.5">
+            <div className="h-3 w-28 animate-pulse bg-paper-deep" />
+            <div className="h-3 w-full animate-pulse bg-paper-deep" />
           </div>
         </li>
       ))}
@@ -93,14 +120,14 @@ export function PlayerMessage({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-xl border border-white/10 bg-zinc-900/60 px-6 text-center">
-      <p className="text-sm font-medium text-zinc-300">{title}</p>
-      <p className="max-w-md text-sm text-zinc-500">{message}</p>
+    <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 border border-dashed border-rule bg-card/70 px-6 text-center">
+      <p className="font-display text-xl">{title}</p>
+      <p className="max-w-md text-sm leading-relaxed text-ink-soft">{message}</p>
       {onRetry ? (
         <button
           type="button"
           onClick={onRetry}
-          className="mt-2 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-white/35 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+          className={`mt-3 ${BUTTON_SMALL}`}
         >
           Try again
         </button>
