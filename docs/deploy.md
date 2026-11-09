@@ -5,9 +5,12 @@ the playback media as a GitHub release asset. The committed `index/` carries
 the search tables, transcripts, and thumbnails; the API image fetches the
 proxies at build time, so the demo answers instantly with no ingest step.
 
-Cost target: Fly `shared-cpu-1x` with 1 GB always on is roughly $5–6/month;
-Vercel Hobby and GitHub releases are free. Playback streams 32–138 MiB per
-film, so heavy use adds Fly egress.
+Cost target: Fly `shared-cpu-1x` with 1 GB scales to zero (suspend) when idle,
+so an unused demo costs only its rootfs (about $0.15/GB/month) instead of the
+~$6.70/month an always-on machine would cost. A suspended machine resumes in
+about a second; a cold start (for example after a deploy) takes ~20s. Vercel
+Hobby and GitHub releases are free. Playback streams 32–138 MiB per film, so
+heavy use adds Fly egress.
 
 ## Prerequisites
 
@@ -48,7 +51,8 @@ curl -sS https://<app>.fly.dev/health
 ```
 
 `fly deploy` builds the root `Dockerfile`, fetches the release asset, bakes the
-pinned ONNX models into the image, and starts one always-on machine. The image
+pinned ONNX models into the image, and starts one machine that suspends when
+idle and resumes on the next request. The image
 also serves the MCP endpoint at `/mcp`; `SHOTGREP_MCP_ALLOWED_HOSTS` must name
 the Fly host or the transport answers `421` (REST is unaffected).
 
